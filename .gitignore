@@ -1,0 +1,25 @@
+# Environment
+.env
+
+# Go binaries
+gateway/main
+auth-service/main
+analytics-service/main
+alert-service/main
+coverage.out
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+.coverage
+
+# Node
+node_modules/
+.next/
+out/
+dist/
+
+# OS
+.DS_Store
+Thumbs.db
