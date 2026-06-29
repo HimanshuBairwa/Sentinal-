@@ -36,6 +36,11 @@ var (
 	ErrWeakPassword    = errors.New("password must be at least 12 characters, with 1 uppercase, 1 lowercase, 1 digit, and 1 special character")
 	ErrAccountLocked   = errors.New("account is locked due to multiple failed login attempts")
 	ErrInvalidPassword = errors.New("invalid email or password")
+
+	hasUpperRegex   = regexp.MustCompile(`[A-Z]`)
+	hasLowerRegex   = regexp.MustCompile(`[a-z]`)
+	hasDigitRegex   = regexp.MustCompile(`[0-9]`)
+	hasSpecialRegex = regexp.MustCompile(`[^a-zA-Z0-9]`)
 )
 
 // ValidatePassword enforces strict password requirements
@@ -43,10 +48,10 @@ func ValidatePassword(password string) error {
 	if len(password) < 12 {
 		return ErrWeakPassword
 	}
-	hasUpper := regexp.MustCompile(`[A-Z]`).MatchString(password)
-	hasLower := regexp.MustCompile(`[a-z]`).MatchString(password)
-	hasDigit := regexp.MustCompile(`[0-9]`).MatchString(password)
-	hasSpecial := regexp.MustCompile(`[^a-zA-Z0-9]`).MatchString(password)
+	hasUpper := hasUpperRegex.MatchString(password)
+	hasLower := hasLowerRegex.MatchString(password)
+	hasDigit := hasDigitRegex.MatchString(password)
+	hasSpecial := hasSpecialRegex.MatchString(password)
 
 	if !hasUpper || !hasLower || !hasDigit || !hasSpecial {
 		return ErrWeakPassword

@@ -12,6 +12,7 @@ import (
 	"sentinel/auth-service/internal/repository"
 
 	"github.com/google/uuid"
+	"github.com/sirupsen/logrus"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -54,14 +55,16 @@ func (s *AuthService) RegisterUser(ctx context.Context, email, password, fullNam
 	}
 
 	// Publish Event
-	_ = s.kafkaProd.PublishEvent(ctx, kafka.AuthEvent{
+	if err := s.kafkaProd.PublishEvent(ctx, kafka.AuthEvent{
 		EventID:   uuid.New().String(),
 		EventType: kafka.EventUserRegistered,
 		Timestamp: time.Now(),
 		UserID:    user.ID.String(),
 		Email:     user.Email,
 		IPAddress: ipAddress,
-	})
+	}); err != nil {
+		logrus.Errorf("failed to publish EventUserRegistered to Kafka: %v", err)
+	}
 
 	return user, nil
 }
@@ -83,22 +86,28 @@ func (s *AuthService) Login(ctx context.Context, email, password string, ipAddre
 		// Increment failed logins (Max 5 attempts, lockout 15 mins)
 		s.userRepo.IncrementFailedLogin(ctx, email, 5, 15)
 		
-		_ = s.kafkaProd.PublishEvent(ctx, kafka.AuthEvent{
+		if err := s.kafkaProd.PublishEvent(ctx, kafka.AuthEvent{
 			EventID:   uuid.New().String(),
 			EventType: kafka.EventLoginFailed,
 			Timestamp: time.Now(),
 			UserID:    user.ID.String(),
 			Email:     user.Email,
 			IPAddress: ipAddress,
-		})
+		}); err != nil {
+			logrus.Errorf("failed to publish EventLoginFailed to Kafka: %v", err)
+		}
 		return nil, domain.ErrInvalidPassword
 	}
 
 	// Success! Reset failed logins
 	if user.FailedLoginCount > 0 {
-		s.userRepo.ResetFailedLogin(ctx, user.ID)
+		if err := s.userRepo.ResetFailedLogin(ctx, user.ID); err != nil {
+			logrus.Errorf("failed to reset failed login count for user %s: %v", user.ID, err)
+		}
 	}
-	s.userRepo.UpdateLastLogin(ctx, user.ID)
+	if err := s.userRepo.UpdateLastLogin(ctx, user.ID); err != nil {
+		logrus.Errorf("failed to update last login for user %s: %v", user.ID, err)
+	}
 
 	// Create Session
 	sessionID := uuid.New()
@@ -130,14 +139,16 @@ func (s *AuthService) Login(ctx context.Context, email, password string, ipAddre
 		return nil, err
 	}
 
-	_ = s.kafkaProd.PublishEvent(ctx, kafka.AuthEvent{
+	if err := s.kafkaProd.PublishEvent(ctx, kafka.AuthEvent{
 		EventID:   uuid.New().String(),
 		EventType: kafka.EventUserLoggedIn,
 		Timestamp: time.Now(),
 		UserID:    user.ID.String(),
 		Email:     user.Email,
 		IPAddress: ipAddress,
-	})
+	}); err != nil {
+		logrus.Errorf("failed to publish EventUserLoggedIn to Kafka: %v", err)
+	}
 
 	return tokenPair, nil
 }

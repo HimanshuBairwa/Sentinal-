@@ -1,7 +1,10 @@
 package middleware
 
 import (
+	"net"
 	"net/http"
+	"strings"
+	
 	"sentinel/gateway/internal/ratelimit"
 )
 
@@ -12,7 +15,11 @@ func RateLimit(limiter ratelimit.Limiter) func(http.Handler) http.Handler {
 			// Use IP Address as the rate limit key
 			ip := r.Header.Get("X-Forwarded-For")
 			if ip == "" {
-				ip = r.RemoteAddr
+				ip, _, _ = net.SplitHostPort(r.RemoteAddr)
+			} else {
+				// Take the first IP if it's a comma-separated list
+				ips := strings.Split(ip, ",")
+				ip = strings.TrimSpace(ips[0])
 			}
 
 			allowed, err := limiter.Allow(r.Context(), ip)

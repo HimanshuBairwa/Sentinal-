@@ -26,8 +26,8 @@ func FetchPublicKey(authServiceURL string) (*rsa.PublicKey, error) {
 	for i := 0; i < 10; i++ {
 		resp, err := client.Get(url)
 		if err == nil && resp.StatusCode == http.StatusOK {
-			defer resp.Body.Close()
 			pemBytes, err := io.ReadAll(resp.Body)
+			resp.Body.Close()
 			if err != nil {
 				return nil, err
 			}
@@ -92,10 +92,15 @@ func (m *AuthMiddleware) VerifyJWT(next http.Handler) http.Handler {
 			return
 		}
 
+		// Prevent Header Contamination
+		r.Header.Del("X-User-ID")
+		r.Header.Del("X-User-Role")
+		r.Header.Del("X-User-Email")
+
 		// Token is valid, forward the claims as headers to downstream microservices!
 		if claims, ok := token.Claims.(jwt.MapClaims); ok {
-			if sub, ok := claims["sub"].(string); ok {
-				r.Header.Set("X-User-ID", sub)
+			if sub, ok := claims["sub"]; ok {
+				r.Header.Set("X-User-ID", fmt.Sprintf("%v", sub))
 			}
 			if role, ok := claims["role"].(string); ok {
 				r.Header.Set("X-User-Role", role)

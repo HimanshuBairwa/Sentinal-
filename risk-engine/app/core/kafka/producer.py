@@ -43,7 +43,7 @@ class RiskDecisionProducer:
                 "processing_time_ms": decision.processing_time_ms,
                 "timestamp": datetime.utcnow().isoformat() + "Z",
             }
-            await self.producer.send(
+            await self.producer.send_and_wait(
                 self.topic,
                 key=decision.decision_id.encode(),
                 value=event,

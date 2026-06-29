@@ -22,14 +22,14 @@ class RulesRepo:
             records = await conn.fetch(query)
             return [dict(r) for r in records]
 
-    async def increment_hit_count(self, id: str):
+    async def increment_hit_counts(self, ids: List[str]):
         query = """
             UPDATE fraud_rules 
             SET hit_count = hit_count + 1, last_triggered_at = NOW() 
-            WHERE id = $1
+            WHERE id = ANY($1)
         """
         async with self.pool.acquire() as conn:
-            await conn.execute(query, id)
+            await conn.execute(query, ids)
 
 def get_rules_repo() -> RulesRepo:
     from app.core.database import get_db

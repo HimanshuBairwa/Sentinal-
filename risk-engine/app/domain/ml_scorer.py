@@ -16,7 +16,6 @@ class LightGBMScorer:
         self.model: Optional[lgb.Booster] = None
         self.explainer: Optional[shap.TreeExplainer] = None
         self.feature_names: List[str] = Features.FEATURE_NAMES
-        self._lock = threading.RLock()
         self.model_version: str = "none"
         self.model_loaded: bool = False
         MODEL_LOADED.set(0)
@@ -38,57 +37,64 @@ class LightGBMScorer:
             for _ in range(100):
                 model.predict(dummy)
                 
-            with self._lock:
-                self.model = model
-                self.explainer = explainer
-                self.model_version = os.path.basename(os.path.dirname(model_path)) if os.path.dirname(model_path) else "v1"
-                self.model_loaded = True
-                MODEL_LOADED.set(1)
-                
+            # Atomically swap pointers
+            self.model = model
+            self.explainer = explainer
+            self.model_version = os.path.basename(os.path.dirname(model_path)) if os.path.dirname(model_path) else "v1"
+            self.model_loaded = True
+            MODEL_LOADED.set(1)
+            
             logger.info(f"Model loaded successfully: {self.model_version}")
         except Exception as e:
             logger.error(f"Failed to load model from {model_path}: {e}")
             self.model_loaded = False
             MODEL_LOADED.set(0)
 
-    def score(self, features: np.ndarray, explain: bool = True) -> Tuple[float, Optional[List[Dict]]]:
+    def score(self, features: np.ndarray, explain: bool = False) -> Tuple[float, Optional[List[Dict]]]:
         """
         Returns (score_0_to_100, shap_top5_or_none)
-        Thread-safe via RLock.
         If model not loaded: returns (50.0, None) — fail open
         """
         if not self.model_loaded or self.model is None:
             return 50.0, None
 
-        with self._lock:
-            start = time.perf_counter()
-            prob = float(self.model.predict(features.reshape(1, -1))[0])
-            inference_ms = (time.perf_counter() - start) * 1000
-            ML_INFERENCE_LATENCY.observe(inference_ms / 1000.0)
+        start = time.perf_counter()
+        prob = float(self.model.predict(features.reshape(1, -1))[0])
+        inference_ms = (time.perf_counter() - start) * 1000
+        ML_INFERENCE_LATENCY.observe(inference_ms / 1000.0)
 
-            shap_top5 = None
-            if explain and self.explainer is not None:
-                # TreeExplainer expects 2D array, returns list of arrays for multiclass or single array for regression/binary
-                sv = self.explainer.shap_values(features.reshape(1, -1))
-                if isinstance(sv, list):
-                    sv = sv[1] # Use class 1 for binary classification if list
-                sv = sv[0]
-                
-                pairs = sorted(
-                    zip(self.feature_names, sv.tolist()),
-                    key=lambda x: abs(x[1]),
-                    reverse=True
-                )[:5]
-                shap_top5 = [
-                    {"feature": f, "contribution": round(v, 4)}
-                    for f, v in pairs
-                ]
+        shap_top5 = None
+        # Conditionally explain only if score > 40.0
+        if prob * 100 > 40.0 and self.explainer is not None:
+            sv = self.explainer.shap_values(features.reshape(1, -1))
+            if isinstance(sv, list):
+                sv = sv[1] # Use class 1 for binary classification if list
+            sv = sv[0]
+            
+            pairs = sorted(
+                zip(self.feature_names, sv.tolist()),
+                key=lambda x: abs(x[1]),
+                reverse=True
+            )[:5]
+            shap_top5 = [
+                {"feature": f, "contribution": round(v, 4)}
+                for f, v in pairs
+            ]
 
         return round(prob * 100, 2), shap_top5
 
     def hot_reload(self, model_path: str):
         """Zero-downtime model swap via atomic pointer swap."""
+        old_model = self.model
+        old_explainer = self.explainer
+        
         self.load_model(model_path)
+        
+        # Explicit cleanup to prevent C++ memory leaks
+        del old_model
+        del old_explainer
+        import gc
+        gc.collect()
 
 # Singleton
 _scorer = LightGBMScorer()

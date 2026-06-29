@@ -15,6 +15,11 @@ func NewReverseProxy(target string) (*httputil.ReverseProxy, error) {
 
 	proxy := httputil.NewSingleHostReverseProxy(parsedURL)
 
+	// Configure a custom transport with higher MaxIdleConnsPerHost to prevent port exhaustion
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.MaxIdleConnsPerHost = 100
+	proxy.Transport = transport
+
 	// Optionally, we can customize the Director to rewrite headers or paths
 	originalDirector := proxy.Director
 	proxy.Director = func(req *http.Request) {

@@ -15,6 +15,7 @@ type TokenService interface {
 	GenerateTokenPair(user *domain.User, sessionID uuid.UUID) (*domain.TokenPair, error)
 	ValidateAccessToken(tokenString string) (*domain.CustomClaims, error)
 	ValidateRefreshToken(tokenString string) (uuid.UUID, error) // Returns Session ID
+	GetPublicKey() *rsa.PublicKey
 }
 
 type JWTTokenService struct {
@@ -95,4 +96,9 @@ func (s *JWTTokenService) ValidateAccessToken(tokenString string) (*domain.Custo
 	}
 
 	return nil, jwt.ErrTokenInvalidClaims
+}
+
+func (s *JWTTokenService) ValidateRefreshToken(tokenString string) (uuid.UUID, error) {
+	// Not implemented in JWTTokenService yet
+	return uuid.Nil, nil
 }

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -31,18 +32,17 @@ func (s *SlidingWindowLimiter) Allow(ctx context.Context, key string) (bool, err
 	windowStart := now - s.window.Nanoseconds()
 	redisKey := fmt.Sprintf("ratelimit:%s", key)
 
-	// Pipeline for atomic execution (mostly)
-	// For perfect atomicity in Redis cluster, a Lua script is preferred.
-	// But pipeline is fast enough for API Gateway rate limiting.
-	pipe := s.client.Pipeline()
+	// Use TxPipeline for atomic execution in Redis (MULTI/EXEC)
+	pipe := s.client.TxPipeline()
 	
 	// Remove older requests outside the window
 	pipe.ZRemRangeByScore(ctx, redisKey, "0", fmt.Sprintf("%d", windowStart))
 	
 	// Add current request
+	// Append a random UUID to the member to prevent overwriting concurrent requests
 	pipe.ZAdd(ctx, redisKey, redis.Z{
 		Score:  float64(now),
-		Member: now,
+		Member: fmt.Sprintf("%d-%s", now, uuid.New().String()),
 	})
 	
 	// Count requests in window

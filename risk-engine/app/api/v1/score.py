@@ -36,9 +36,9 @@ async def score_request(
     ip_task = asyncio.create_task(ip_intel.score(request.ip_address))
     features, ip_score = await asyncio.gather(features_task, ip_task)
 
-    # Scoring (CPU-bound, sequential)
-    rule_score, triggered_rules = rules_engine.evaluate(features)
-    ml_score, shap_top5 = ml_scorer.score(features.to_numpy())
+    # Scoring (CPU-bound, offloaded to thread pool)
+    rule_score, triggered_rules = await asyncio.to_thread(rules_engine.evaluate, features)
+    ml_score, shap_top5 = await asyncio.to_thread(ml_scorer.score, features.to_numpy())
     velocity_score = features.velocity_score()
 
     # Aggregate
@@ -50,10 +50,14 @@ async def score_request(
     processing_ms = (time.perf_counter() - start) * 1000
     decision.processing_time_ms = round(processing_ms, 3)
 
-    # Fire and forget — do NOT await these
-    asyncio.create_task(decisions_repo.save(decision))
-    asyncio.create_task(kafka_producer.publish_decision(decision))
-    asyncio.create_task(feature_store.update_velocity(request))
+    import app.main
+    for bg_task in [
+        asyncio.create_task(decisions_repo.save(decision)),
+        asyncio.create_task(kafka_producer.publish_decision(decision)),
+        asyncio.create_task(feature_store.update_velocity(request))
+    ]:
+        app.main._background_tasks.add(bg_task)
+        bg_task.add_done_callback(app.main._background_tasks.discard)
 
     # Record metrics
     SCORE_HISTOGRAM.observe(decision.final_score)

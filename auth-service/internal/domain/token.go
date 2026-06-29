@@ -21,27 +21,3 @@ type CustomClaims struct {
 
 // Ensure our custom claims implement the jwt.Claims interface
 var _ jwt.Claims = (*CustomClaims)(nil)
-
-func (c *CustomClaims) GetAudience() (jwt.ClaimStrings, error) {
-	return c.RegisteredClaims.Audience, nil
-}
-
-func (c *CustomClaims) GetExpirationTime() (*jwt.NumericDate, error) {
-	return c.RegisteredClaims.ExpiresAt, nil
-}
-
-func (c *CustomClaims) GetIssuedAt() (*jwt.NumericDate, error) {
-	return c.RegisteredClaims.IssuedAt, nil
-}
-
-func (c *CustomClaims) GetIssuer() (string, error) {
-	return c.RegisteredClaims.Issuer, nil
-}
-
-func (c *CustomClaims) GetNotBefore() (*jwt.NumericDate, error) {
-	return c.RegisteredClaims.NotBefore, nil
-}
-
-func (c *CustomClaims) GetSubject() (string, error) {
-	return c.RegisteredClaims.Subject, nil
-}

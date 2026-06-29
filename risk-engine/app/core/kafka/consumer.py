@@ -32,14 +32,19 @@ class AuthEventConsumer:
         asyncio.create_task(self._consume_loop())
 
     async def _consume_loop(self):
-        async for msg in self.consumer:
-            if not self._running:
-                break
+        while self._running:
             try:
-                await self._process_event(msg.value)
+                async for msg in self.consumer:
+                    if not self._running:
+                        break
+                    try:
+                        await self._process_event(msg.value)
+                    except Exception as e:
+                        logger.error(f"Error processing Kafka message: {e}")
+                        KAFKA_CONSUMER_ERRORS.inc()
             except Exception as e:
-                logger.error(f"Error processing Kafka message: {e}")
-                KAFKA_CONSUMER_ERRORS.inc()
+                logger.error(f"Kafka consumer connection error: {e}. Reconnecting in 5s...")
+                await asyncio.sleep(5)
 
     async def _process_event(self, event: dict):
         """Update velocity counters for every consumed auth event."""

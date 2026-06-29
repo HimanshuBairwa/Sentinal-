@@ -29,15 +29,13 @@ type RegisterRequest struct {
 
 func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	var req RegisterRequest
+	r.Body = http.MaxBytesReader(w, r.Body, 1048576) // 1MB Limit
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	ipAddress := r.Header.Get("X-Forwarded-For")
-	if ipAddress == "" {
-		ipAddress = r.RemoteAddr
-	}
+	ipAddress := r.RemoteAddr
 
 	user, err := h.authService.RegisterUser(r.Context(), req.Email, req.Password, req.FullName, ipAddress)
 	if err != nil {
@@ -61,15 +59,13 @@ type LoginRequest struct {
 
 func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	var req LoginRequest
+	r.Body = http.MaxBytesReader(w, r.Body, 1048576) // 1MB Limit
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	ipAddress := r.Header.Get("X-Forwarded-For")
-	if ipAddress == "" {
-		ipAddress = r.RemoteAddr
-	}
+	ipAddress := r.RemoteAddr
 
 	deviceInfo := map[string]any{
 		"user_agent": r.UserAgent(),
@@ -105,14 +101,7 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *AuthHandler) PublicKey(w http.ResponseWriter, r *http.Request) {
-	// For simplicity, we can get it from tokenSvc, but we need to type assert
-	jwtSvc, ok := h.tokenSvc.(*service.JWTTokenService)
-	if !ok {
-		http.Error(w, "internal error", http.StatusInternalServerError)
-		return
-	}
-	
-	pemBytes, err := service.GetPublicKeyPEM(jwtSvc.GetPublicKey())
+	pemBytes, err := service.GetPublicKeyPEM(h.tokenSvc.GetPublicKey())
 	if err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
 		return

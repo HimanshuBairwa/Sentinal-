@@ -16,11 +16,26 @@ class RulesEngine:
         self._cache_loaded = False
 
     async def load_rules(self):
-        """Load all enabled rules from DB into memory cache."""
+        """Load all enabled rules from DB into memory cache and precompile AST."""
         rules = await self.repo.get_all_enabled()
-        self._rules_cache = rules
+        self._rules_cache = []
+        for rule in rules:
+            if not rule["is_enabled"]:
+                continue
+            try:
+                # Pre-compile the AST!
+                compiled = self.parser.parse(rule["expression"])
+                self._rules_cache.append({
+                    "id": rule["id"],
+                    "rule_id": rule["rule_id"],
+                    "compiled": compiled,
+                    "score_contribution": float(rule["score_contribution"])
+                })
+            except Exception as e:
+                logger.warning(f"Rule {rule['rule_id']} compilation error: {e}")
+                
         self._cache_loaded = True
-        logger.info(f"Loaded {len(rules)} rules into memory cache.")
+        logger.info(f"Loaded and precompiled {len(self._rules_cache)} rules into memory cache.")
 
     def evaluate(self, features: Features) -> Tuple[float, List[str]]:
         """
@@ -29,26 +44,29 @@ class RulesEngine:
         Safe: uses py-expression-eval, never eval()
         """
         feature_dict = asdict(features)
-        triggered = []
+        triggered_ids = []
+        triggered_db_ids = []
         max_score = 0.0
 
         for rule in self._rules_cache:
-            if not rule["is_enabled"]:
-                continue
             try:
-                result = self.parser.parse(rule["expression"]).evaluate(feature_dict)
+                result = rule["compiled"].evaluate(feature_dict)
                 if result:
-                    triggered.append(rule["rule_id"])
-                    max_score = max(max_score, float(rule["score_contribution"]))
-                    # Fire-and-forget: increment hit_count
-                    asyncio.create_task(
-                        self.repo.increment_hit_count(rule["id"])
-                    )
+                    triggered_ids.append(rule["rule_id"])
+                    triggered_db_ids.append(rule["id"])
+                    max_score = max(max_score, rule["score_contribution"])
             except Exception as e:
-                # Bad expression in DB — log and skip, never crash
                 logger.warning(f"Rule {rule['rule_id']} eval error: {e}")
 
-        return max_score, triggered
+        # Fire-and-forget: batch increment hit_count
+        if triggered_db_ids:
+            # We track tasks in main.py to await on shutdown
+            import app.main
+            task = asyncio.create_task(self.repo.increment_hit_counts(triggered_db_ids))
+            app.main._background_tasks.add(task)
+            task.add_done_callback(app.main._background_tasks.discard)
+
+        return max_score, triggered_ids
 
     async def reload_rules(self):
         """Hot-reload rules from DB."""

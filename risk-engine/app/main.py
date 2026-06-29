@@ -22,6 +22,7 @@ logger = logging.getLogger(__name__)
 
 # Global consumer instance for graceful shutdown
 _kafka_consumer = None
+_background_tasks = set()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -57,6 +58,10 @@ async def lifespan(app: FastAPI):
     yield
     
     # Shutdown
+    logger.info(f"Waiting for {len(_background_tasks)} background tasks to complete...")
+    if _background_tasks:
+        await asyncio.gather(*_background_tasks, return_exceptions=True)
+        
     if _kafka_consumer:
         await _kafka_consumer.stop()
     await producer.stop()
