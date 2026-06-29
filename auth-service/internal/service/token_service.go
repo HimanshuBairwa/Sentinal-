@@ -40,6 +40,10 @@ func GenerateRSAKeyPair() (*rsa.PrivateKey, error) {
 	return rsa.GenerateKey(rand.Reader, 2048)
 }
 
+func (s *JWTTokenService) GetPublicKey() *rsa.PublicKey {
+	return s.publicKey
+}
+
 func (s *JWTTokenService) GenerateTokenPair(user *domain.User, sessionID uuid.UUID) (*domain.TokenPair, error) {
 	now := time.Now()
 

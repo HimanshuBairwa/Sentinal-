@@ -27,6 +27,7 @@ func NewRouter(authHandler *AuthHandler, tokenService service.TokenService) http
 		// Public routes
 		r.Post("/register", authHandler.Register)
 		r.Post("/login", authHandler.Login)
+		r.Get("/public-key", authHandler.PublicKey)
 
 		// Protected routes
 		r.Group(func(r chi.Router) {

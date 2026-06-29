@@ -42,8 +42,8 @@ func main() {
 	kafkaProducer := kafka.NewProducer(cfg.KafkaBrokers, "auth.events")
 	defer kafkaProducer.Close()
 
-	// 4. Setup RSA Keys (In prod, load from vault/file)
-	privKey, err := service.GenerateRSAKeyPair()
+	// 4. Setup RSA Keys (Persistent)
+	privKey, err := service.LoadOrGenerateRSAKey("jwtRS256.key")
 	if err != nil {
 		log.Fatalf("Failed to generate RSA key: %v", err)
 	}

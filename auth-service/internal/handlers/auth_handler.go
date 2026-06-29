@@ -103,3 +103,21 @@ func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
 		"role":    claims.Role,
 	})
 }
+
+func (h *AuthHandler) PublicKey(w http.ResponseWriter, r *http.Request) {
+	// For simplicity, we can get it from tokenSvc, but we need to type assert
+	jwtSvc, ok := h.tokenSvc.(*service.JWTTokenService)
+	if !ok {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	
+	pemBytes, err := service.GetPublicKeyPEM(jwtSvc.GetPublicKey())
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/x-pem-file")
+	w.Write(pemBytes)
+}
