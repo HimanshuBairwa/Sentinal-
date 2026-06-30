@@ -49,7 +49,6 @@ services:
       KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
       KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
-      CLUSTER_ID: 'MkU3OEVBNTcwNTJENDM2Qk'
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
@@ -57,7 +56,7 @@ services:
       KAFKA_NUM_PARTITIONS: 6
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
     volumes:
-      - kafka_data:/tmp/kafka-logs
+      - kafka_data_new:/tmp/kafka-logs
     healthcheck:
       test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list"]
       interval: 10s
@@ -300,7 +299,7 @@ services:
 volumes:
   postgres_data:
   redis_data:
-  kafka_data:
+  kafka_data_new:
   clickhouse_data:
   minio_data:
   grafana_data:
