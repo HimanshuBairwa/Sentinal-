@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, Depends
@@ -27,31 +28,53 @@ _background_tasks = set()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # 1. Init Database
-    db_pool = await init_db_pool()
+    try:
+        db_pool = await init_db_pool()
+    except Exception as e:
+        logger.error(f"Database connection failed: {e}. Service will start without DB.")
+        db_pool = None
     
     # 2. Init Redis
     redis_client = await init_redis()
     
     # 3. Init Kafka Producer
     producer = get_decision_producer()
-    await producer.start()
+    try:
+        await producer.start()
+    except Exception as e:
+        logger.error(f"Kafka producer failed to start: {e}")
     
-    # 4. Load LightGBM Model
+    # 4. Load LightGBM Model (non-fatal if missing)
     scorer = get_ml_scorer()
-    scorer.load_model(settings.MODEL_PATH)
+    try:
+        scorer.load_model(settings.MODEL_PATH)
+    except Exception as e:
+        logger.warning(f"Model load failed: {e}. Running in rules-only mode.")
     
-    # 5. Load Fraud Rules
-    rules_repo = RulesRepo(db_pool)
-    await init_rules_engine(rules_repo)
+    # 5. Load Fraud Rules (non-fatal if table doesn't exist yet)
+    if db_pool:
+        try:
+            rules_repo = RulesRepo(db_pool)
+            await init_rules_engine(rules_repo)
+        except Exception as e:
+            logger.warning(f"Rules loading failed: {e}. Will retry on first request.")
+    else:
+        logger.warning("Skipping rules loading - no DB connection.")
     
-    # 6. Start Kafka Consumer
+    # 6. Start Kafka Consumer (non-fatal)
     global _kafka_consumer
-    feature_store = FeatureStore(redis_client)
-    _kafka_consumer = AuthEventConsumer(feature_store)
-    await _kafka_consumer.start()
+    try:
+        feature_store = FeatureStore(redis_client)
+        _kafka_consumer = AuthEventConsumer(feature_store)
+        await _kafka_consumer.start()
+    except Exception as e:
+        logger.error(f"Kafka consumer failed to start: {e}")
     
     # 7. Start Prometheus Metrics Server
-    start_metrics_server(9102)
+    try:
+        start_metrics_server(9102)
+    except Exception as e:
+        logger.warning(f"Metrics server failed: {e}")
     
     logger.info("Risk Engine ready")
     
