@@ -16,6 +16,8 @@ import (
 
 type AuthMiddleware struct {
 	publicKey *rsa.PublicKey
+	issuer    string
+	audience  string
 }
 
 // FetchPublicKey continuously tries to fetch the public key from the auth service until successful
@@ -60,19 +62,24 @@ func FetchPublicKey(authServiceURL string) (*rsa.PublicKey, error) {
 	return nil, errors.New("timeout waiting for auth service public key")
 }
 
-func NewAuthMiddleware(pubKey *rsa.PublicKey) *AuthMiddleware {
-	return &AuthMiddleware{publicKey: pubKey}
+func NewAuthMiddleware(pubKey *rsa.PublicKey, issuer, audience string) *AuthMiddleware {
+	return &AuthMiddleware{publicKey: pubKey, issuer: issuer, audience: audience}
 }
 
 func (m *AuthMiddleware) VerifyJWT(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		authHeader := r.Header.Get("Authorization")
+		if authHeader == "" && isWebSocketUpgrade(r) {
+			if accessToken := r.URL.Query().Get("access_token"); accessToken != "" {
+				authHeader = "Bearer " + accessToken
+			}
+		}
 		if authHeader == "" {
 			http.Error(w, "missing authorization header", http.StatusUnauthorized)
 			return
 		}
 
-		parts := strings.Split(authHeader, " ")
+		parts := strings.Fields(authHeader)
 		if len(parts) != 2 || parts[0] != "Bearer" {
 			http.Error(w, "invalid authorization header format", http.StatusUnauthorized)
 			return
@@ -81,11 +88,8 @@ func (m *AuthMiddleware) VerifyJWT(next http.Handler) http.Handler {
 		tokenString := parts[1]
 		
 		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
-			if _, ok := token.Method.(*jwt.SigningMethodRSA); !ok {
-				return nil, jwt.ErrSignatureInvalid
-			}
 			return m.publicKey, nil
-		})
+		}, jwt.WithValidMethods([]string{jwt.SigningMethodRS256.Alg()}), jwt.WithIssuer(m.issuer), jwt.WithAudience(m.audience), jwt.WithExpirationRequired())
 
 		if err != nil || !token.Valid {
 			http.Error(w, "invalid or expired token", http.StatusUnauthorized)
@@ -112,4 +116,8 @@ func (m *AuthMiddleware) VerifyJWT(next http.Handler) http.Handler {
 
 		next.ServeHTTP(w, r)
 	})
+}
+
+func isWebSocketUpgrade(r *http.Request) bool {
+	return strings.EqualFold(r.Header.Get("Connection"), "Upgrade") && strings.EqualFold(r.Header.Get("Upgrade"), "websocket")
 }

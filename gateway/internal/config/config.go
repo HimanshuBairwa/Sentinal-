@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"strconv"
+	"strings"
 )
 
 type Config struct {
@@ -12,6 +13,9 @@ type Config struct {
 	RiskEngineURL     string
 	AnalyticsSvcURL   string
 	RateLimitRequests int
+	JWTIssuer         string
+	JWTAudience       string
+	TrustProxy        bool
 }
 
 func LoadConfig() *Config {
@@ -53,5 +57,15 @@ func LoadConfig() *Config {
 		RiskEngineURL:     riskURL,
 		AnalyticsSvcURL:   analyticsURL,
 		RateLimitRequests: rateLimit,
+		JWTIssuer:         getEnv("JWT_ISSUER", "sentinel-auth-service"),
+		JWTAudience:       getEnv("JWT_AUDIENCE", "sentinel-api"),
+		TrustProxy:        strings.EqualFold(getEnv("TRUST_PROXY", "false"), "true"),
 	}
+}
+
+func getEnv(key, fallback string) string {
+	if value := strings.TrimSpace(os.Getenv(key)); value != "" {
+		return value
+	}
+	return fallback
 }

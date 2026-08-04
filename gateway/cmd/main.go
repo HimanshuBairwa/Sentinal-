@@ -16,6 +16,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
+	"github.com/go-chi/cors"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -45,7 +46,7 @@ func main() {
 	}
 	log.Println("Successfully loaded RSA public key for JWT validation.")
 
-	authMiddleware := middleware.NewAuthMiddleware(pubKey)
+	authMiddleware := middleware.NewAuthMiddleware(pubKey, cfg.JWTIssuer, cfg.JWTAudience)
 
 	// 3. Initialize Reverse Proxies
 	authProxy, err := proxy.NewReverseProxy(cfg.AuthServiceURL)
@@ -67,11 +68,19 @@ func main() {
 	r := chi.NewRouter()
 
 	// Global Middlewares
+	r.Use(cors.Handler(cors.Options{
+		AllowedOrigins:   []string{"http://localhost:3000", "http://127.0.0.1:3000"},
+		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-CSRF-Token"},
+		ExposedHeaders:   []string{"Link"},
+		AllowCredentials: true,
+		MaxAge:           300,
+	}))
 	r.Use(chimiddleware.RequestID)
 	r.Use(chimiddleware.RealIP)
 	r.Use(chimiddleware.Logger)
 	r.Use(chimiddleware.Recoverer)
-	r.Use(middleware.RateLimit(rateLimiter)) // DDoS Protection First
+	r.Use(middleware.RateLimit(rateLimiter, cfg.TrustProxy))
 
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
