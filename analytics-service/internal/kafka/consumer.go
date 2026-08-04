@@ -27,7 +27,7 @@ func NewConsumer(brokers []string, topic, groupID string, engine *batch.Engine) 
 		Topic:          topic,
 		MinBytes:       10e3, // 10KB
 		MaxBytes:       10e6, // 10MB
-		CommitInterval: time.Second,
+		CommitInterval: 0,
 		StartOffset:    kafka.LastOffset,
 	})
 
@@ -50,7 +50,7 @@ func (c *Consumer) Start() {
 			case <-c.ctx.Done():
 				return
 			default:
-				msg, err := c.reader.ReadMessage(c.ctx)
+				msg, err := c.reader.FetchMessage(c.ctx)
 				if err != nil {
 					if c.ctx.Err() != nil {
 						return // context cancelled
@@ -62,10 +62,27 @@ func (c *Consumer) Start() {
 				var event models.Event
 				if err := json.Unmarshal(msg.Value, &event); err != nil {
 					log.Printf("Failed to unmarshal event: %v", err)
+					_ = c.reader.CommitMessages(c.ctx, msg)
 					continue
 				}
-
-				c.engine.AddEvent(&event)
+				event.Payload = string(msg.Value)
+				if event.EventID == "" {
+					event.EventID = event.DecisionID
+				}
+				if event.RiskScore == 0 {
+					event.RiskScore = event.FinalScore
+				}
+				event.Normalize()
+				persistCtx, cancel := context.WithTimeout(c.ctx, 30*time.Second)
+				err = c.engine.AddEvent(persistCtx, &event)
+				cancel()
+				if err != nil {
+					log.Printf("Failed to persist analytics event: %v", err)
+					continue
+				}
+				if err := c.reader.CommitMessages(c.ctx, msg); err != nil {
+					log.Printf("Failed to commit analytics event: %v", err)
+				}
 			}
 		}
 	}()

@@ -31,6 +31,9 @@ class RiskDecisionProducer:
             
         try:
             event = {
+                "event_type": "risk.decision.created",
+                "schema_version": 1,
+                "producer": "risk-engine",
                 "decision_id": decision.decision_id,
                 "request_id": decision.request_id,
                 "user_id": decision.user_id,
@@ -42,6 +45,13 @@ class RiskDecisionProducer:
                 "shap_top5": decision.shap_top5,
                 "processing_time_ms": decision.processing_time_ms,
                 "timestamp": datetime.utcnow().isoformat() + "Z",
+                "occurred_at": datetime.utcnow().isoformat() + "Z",
+                "data": {
+                    "final_score": decision.final_score,
+                    "action": decision.action,
+                    "scores": decision.scores,
+                    "triggered_rules": decision.triggered_rules,
+                },
             }
             await self.producer.send_and_wait(
                 self.topic,

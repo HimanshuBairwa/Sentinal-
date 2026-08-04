@@ -1,54 +1,58 @@
-import { useEffect, useRef } from 'react';
-import { useStore } from '../store/store';
+"use client";
 
-export function useWebSocket(url: string) {
-  const { setConnected, updateMetrics, addTransaction } = useStore();
-  const wsRef = useRef<WebSocket | null>(null);
+import { useEffect, useRef, useState } from "react";
+
+export type WebSocketEnvelope<T> = {
+  type?: string;
+  data: T;
+};
+
+export function useWebSocket<T>(url: string | null) {
+  const [data, setData] = useState<T | null>(null);
+  const [isConnected, setIsConnected] = useState(false);
+  const socketRef = useRef<WebSocket | null>(null);
+  const retryRef = useRef(0);
 
   useEffect(() => {
-    if (url === 'mock') {
-      setConnected(true);
-      const interval = setInterval(() => {
-        updateMetrics({
-          activeUsers: Math.floor(1000 + Math.random() * 500),
-          fraudAlerts: Math.floor(Math.random() * 20)
-        });
-        addTransaction({
-          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-          amount: Math.floor(Math.random() * 2000) + 100
-        });
-      }, 3000);
-      return () => clearInterval(interval);
-    }
+    if (!url) return;
+    let cancelled = false;
+    let retryTimer: ReturnType<typeof setTimeout> | undefined;
 
-    const ws = new WebSocket(url);
-    wsRef.current = ws;
-
-    ws.onopen = () => setConnected(true);
-    ws.onclose = () => setConnected(false);
-    ws.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        if (data.type === 'METRICS') {
-          updateMetrics({
-            activeUsers: data.activeUsers,
-            fraudAlerts: data.fraudAlerts,
-          });
-        } else if (data.type === 'TRANSACTION') {
-          addTransaction({
-            time: new Date().toLocaleTimeString(),
-            amount: data.amount
-          });
+    const connect = () => {
+      if (cancelled) return;
+      const socket = new WebSocket(url);
+      socketRef.current = socket;
+      socket.onopen = () => {
+        retryRef.current = 0;
+        setIsConnected(true);
+      };
+      socket.onmessage = (event) => {
+        try {
+          const message = JSON.parse(event.data) as WebSocketEnvelope<T> | T;
+          const envelope = message as Partial<WebSocketEnvelope<T>>;
+          setData(envelope.type && "data" in envelope ? envelope.data as T : message as T);
+        } catch {
+          // Ignore malformed telemetry frames; the next valid frame remains useful.
         }
-      } catch (error) {
-        console.error('Failed to parse WebSocket message', error);
-      }
+      };
+      socket.onclose = () => {
+        setIsConnected(false);
+        if (!cancelled) {
+          const delay = Math.min(30_000, 500 * 2 ** retryRef.current++);
+          retryTimer = setTimeout(connect, delay);
+        }
+      };
+      socket.onerror = () => socket.close();
     };
 
+    connect();
     return () => {
-      ws.close();
+      cancelled = true;
+      if (retryTimer) clearTimeout(retryTimer);
+      socketRef.current?.close();
+      socketRef.current = null;
     };
-  }, [url, setConnected, updateMetrics, addTransaction]);
+  }, [url]);
 
-  return wsRef.current;
+  return { data, isConnected };
 }

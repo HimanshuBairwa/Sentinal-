@@ -6,6 +6,7 @@ import (
 	"os/signal"
 	"syscall"
 	"time"
+	"strings"
 
 	"sentinel/analytics-service/internal/api"
 	"sentinel/analytics-service/internal/batch"
@@ -20,11 +21,10 @@ func main() {
 	clickhouseUser := getEnv("CLICKHOUSE_USER", "default")
 	clickhousePass := getEnv("CLICKHOUSE_PASS", "")
 
-	kafkaBrokers := []string{getEnv("KAFKA_BROKER", "localhost:9092")}
-	kafkaTopic := getEnv("KAFKA_TOPIC", "analytics-events")
+	kafkaBrokers := splitCSV(getEnv("KAFKA_BROKERS", getEnv("KAFKA_BROKER", "localhost:9092")))
 	kafkaGroupID := getEnv("KAFKA_GROUP_ID", "analytics-service-group")
 
-	apiAddr := getEnv("API_ADDR", ":8080")
+	apiAddr := getEnv("API_ADDR", ":8083")
 
 	// 1. Initialize ClickHouse Repo
 	repo, err := repository.NewClickHouseRepo(clickhouseAddr, clickhouseDB, clickhouseUser, clickhousePass)
@@ -36,16 +36,26 @@ func main() {
 	// 2. Initialize Batching Engine
 	// Batch size of 1000 events or 1 second flush interval
 	engine := batch.NewEngine(repo, 1000, 1*time.Second)
-	engine.Start(5) // Start 5 concurrent workers
+	engine.Start(1)
 	defer engine.Stop()
 
 	// 3. Initialize Kafka Consumer
-	consumer := kafka.NewConsumer(kafkaBrokers, kafkaTopic, kafkaGroupID, engine)
-	consumer.Start()
-	defer consumer.Stop()
+	topics := []string{"auth.events", "risk.decisions", "api.metrics", "alerts.fired"}
+	consumers := make([]*kafka.Consumer, 0, len(topics))
+	for _, topic := range topics {
+		consumer := kafka.NewConsumer(kafkaBrokers, topic, kafkaGroupID+"-"+topic, engine)
+		consumer.Start()
+		consumers = append(consumers, consumer)
+	}
+	defer func() {
+		for _, consumer := range consumers {
+			consumer.Stop()
+		}
+	}()
 
 	// 4. Initialize HTTP API
-	server := api.NewServer(engine)
+	server := api.NewServer(engine, repo)
+	engine.SetEventHandler(server.BroadcastEvent)
 	go func() {
 		if err := server.Start(apiAddr); err != nil {
 			log.Printf("HTTP server stopped: %v", err)
@@ -69,4 +79,15 @@ func getEnv(key, fallback string) string {
 		return value
 	}
 	return fallback
+}
+
+func splitCSV(value string) []string {
+	parts := strings.Split(value, ",")
+	result := make([]string, 0, len(parts))
+	for _, part := range parts {
+		if value := strings.TrimSpace(part); value != "" {
+			result = append(result, value)
+		}
+	}
+	return result
 }

@@ -52,7 +52,14 @@ class AuthEventConsumer:
         user_id = event.get("user_id")
         device_fp = event.get("device", {}).get("fingerprint", "")
         country = event.get("geo", {}).get("country_code", "XX")
-        is_failure = event.get("event_type") == "user.login.failure"
+        is_failure = event.get("event_type") in {
+            "auth.user.login_failed",
+            "user.login.failure",
+            "login_failed",
+        }
+
+        if not ip:
+            ip = event.get("source", {}).get("ip_address", "")
 
         tasks = []
         for window in [60, 300, 900, 3600]:

@@ -1,7 +1,7 @@
 import asyncio
 import logging
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 
@@ -96,7 +96,7 @@ app = FastAPI(title="Sentinel Risk Engine", lifespan=lifespan)
 # CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[origin.strip() for origin in settings.CORS_ALLOWED_ORIGINS.split(",") if origin.strip()],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -112,10 +112,26 @@ app.include_router(rules.router, prefix="/api/v1/rules", tags=["Fraud Rules"])
 @app.get("/health")
 async def health_check():
     scorer = get_ml_scorer()
+    db_status = "error"
+    redis_status = "error"
+    try:
+        from app.core.database import get_db
+        async with get_db().acquire() as conn:
+            await conn.execute("SELECT 1")
+        db_status = "ok"
+    except Exception as exc:
+        logger.warning("database health check failed: %s", exc)
+    try:
+        from app.core.redis_client import get_redis
+        await get_redis().ping()
+        redis_status = "ok"
+    except Exception as exc:
+        logger.warning("redis health check failed: %s", exc)
+    healthy = db_status == "ok" and redis_status == "ok"
     return {
-        "status": "ok",
-        "db": "ok",
-        "redis": "ok",
+        "status": "ok" if healthy else "degraded",
+        "db": db_status,
+        "redis": redis_status,
         "kafka": "ok" if _kafka_consumer and _kafka_consumer._running else "error",
         "model_loaded": scorer.model_loaded,
         "model_version": scorer.model_version,
@@ -126,6 +142,13 @@ async def health_check():
 async def readiness_check():
     scorer = get_ml_scorer()
     if _kafka_consumer and _kafka_consumer._running:
+        try:
+            from app.core.database import get_db
+            async with get_db().acquire() as conn:
+                await conn.execute("SELECT 1")
+            from app.core.redis_client import get_redis
+            await get_redis().ping()
+        except Exception:
+            raise HTTPException(status_code=503, detail="Dependencies unavailable")
         return {"status": "ready"}
-    from fastapi import HTTPException
     raise HTTPException(status_code=503, detail="Starting up")

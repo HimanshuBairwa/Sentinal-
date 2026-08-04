@@ -13,6 +13,12 @@ import (
 type ClickHouseRepo interface {
 	InsertBatch(ctx context.Context, events []*models.Event) error
 	Close() error
+	GetOverview(ctx context.Context) (map[string]interface{}, error)
+	GetFraudRate(ctx context.Context) ([]map[string]interface{}, error)
+	GetTopThreats(ctx context.Context) ([]map[string]interface{}, error)
+	GetLatency(ctx context.Context) (map[string]interface{}, error)
+	GetEvents(ctx context.Context, limit, offset int) ([]*models.Event, error)
+	GetGeo(ctx context.Context) ([]map[string]interface{}, error)
 }
 
 type clickHouseRepoImpl struct {
@@ -43,16 +49,23 @@ func NewClickHouseRepo(addr string, database, username, password string) (ClickH
 	// Create table if not exists
 	query := `
 	CREATE TABLE IF NOT EXISTS events (
-		id UUID,
+		id String,
+		event_id String,
 		session_id String,
 		user_id String,
-		event_type String,
+		event_type LowCardinality(String),
+		producer LowCardinality(String),
 		payload String,
 		ip_address String,
 		user_agent String,
-		timestamp DateTime
+		request_id String,
+		action LowCardinality(String),
+		risk_score Float32,
+		timestamp DateTime('UTC')
 	) ENGINE = MergeTree()
+	PARTITION BY toYYYYMM(timestamp)
 	ORDER BY (timestamp, event_type, user_id)
+	TTL timestamp + INTERVAL 90 DAY
 	`
 	if err := conn.Exec(context.Background(), query); err != nil {
 		return nil, fmt.Errorf("failed to create table: %w", err)
@@ -64,7 +77,9 @@ func NewClickHouseRepo(addr string, database, username, password string) (ClickH
 }
 
 func (r *clickHouseRepoImpl) InsertBatch(ctx context.Context, events []*models.Event) error {
-	batch, err := r.conn.PrepareBatch(ctx, "INSERT INTO events")
+	batch, err := r.conn.PrepareBatch(ctx, `INSERT INTO events
+		(id, event_id, session_id, user_id, event_type, producer, payload,
+		 ip_address, user_agent, request_id, action, risk_score, timestamp)`)
 	if err != nil {
 		return fmt.Errorf("failed to prepare batch: %w", err)
 	}
@@ -72,12 +87,17 @@ func (r *clickHouseRepoImpl) InsertBatch(ctx context.Context, events []*models.E
 	for _, e := range events {
 		err := batch.Append(
 			e.ID,
+			e.EventID,
 			e.SessionID,
 			e.UserID,
 			e.EventType,
+			e.Producer,
 			e.Payload,
 			e.IPAddress,
 			e.UserAgent,
+			e.RequestID,
+			e.Action,
+			e.RiskScore,
 			e.Timestamp,
 		)
 		if err != nil {

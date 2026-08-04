@@ -14,11 +14,21 @@ type Engine struct {
 	repo          repository.ClickHouseRepo
 	batchSize     int
 	flushInterval time.Duration
-	eventChan     chan *models.Event
+	eventChan     chan queuedEvent
 	wg            sync.WaitGroup
 	ctx           context.Context
 	cancel        context.CancelFunc
 	pool          *sync.Pool
+	onEvent       func(*models.Event)
+}
+
+type queuedEvent struct {
+	event *models.Event
+	done  chan error
+}
+
+func (e *Engine) SetEventHandler(handler func(*models.Event)) {
+	e.onEvent = handler
 }
 
 func NewEngine(repo repository.ClickHouseRepo, batchSize int, flushInterval time.Duration) *Engine {
@@ -27,7 +37,7 @@ func NewEngine(repo repository.ClickHouseRepo, batchSize int, flushInterval time
 		repo:          repo,
 		batchSize:     batchSize,
 		flushInterval: flushInterval,
-		eventChan:     make(chan *models.Event, batchSize*10),
+		eventChan:     make(chan queuedEvent, batchSize*10),
 		ctx:           ctx,
 		cancel:        cancel,
 		pool: &sync.Pool{
@@ -54,29 +64,54 @@ func (e *Engine) worker() {
 	defer ticker.Stop()
 
 	batchPtr := e.pool.Get().(*[]*models.Event)
-	batch := *batchPtr
+	batch := make([]queuedEvent, 0, cap(*batchPtr))
 
 	flush := func() {
 		if len(batch) > 0 {
-			err := e.repo.InsertBatch(e.ctx, batch)
-			if err != nil {
-				log.Printf("Failed to insert batch: %v", err)
+			events := (*batchPtr)[:0]
+			for _, item := range batch {
+				events = append(events, item.event)
 			}
-			// Clear the slice but keep capacity
+			flushCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			var err error
+			for attempt := 0; attempt < 3; attempt++ {
+				err = e.repo.InsertBatch(flushCtx, events)
+				if err == nil {
+					break
+				}
+				time.Sleep(time.Duration(attempt+1) * 250 * time.Millisecond)
+			}
+			cancel()
+			if err != nil {
+				log.Printf("failed to insert analytics batch after retries: %v", err)
+				for _, item := range batch {
+					item.done <- err
+					close(item.done)
+				}
+				batch = batch[:0]
+				return
+			}
+			for _, item := range batch {
+				item.done <- nil
+				close(item.done)
+				if e.onEvent != nil {
+					e.onEvent(item.event)
+				}
+			}
 			batch = batch[:0]
 		}
 	}
 
 	for {
 		select {
-		case <-e.ctx.Done():
-			flush()
-			// Return slice to pool
-			*batchPtr = batch
-			e.pool.Put(batchPtr)
-			return
-		case event := <-e.eventChan:
-			batch = append(batch, event)
+		case item, ok := <-e.eventChan:
+			if !ok {
+				flush()
+				*batchPtr = (*batchPtr)[:0]
+				e.pool.Put(batchPtr)
+				return
+			}
+			batch = append(batch, item)
 			if len(batch) >= e.batchSize {
 				flush()
 			}
@@ -86,15 +121,26 @@ func (e *Engine) worker() {
 	}
 }
 
-func (e *Engine) AddEvent(event *models.Event) {
+func (e *Engine) AddEvent(ctx context.Context, event *models.Event) error {
+	done := make(chan error, 1)
 	select {
-	case e.eventChan <- event:
+	case e.eventChan <- queuedEvent{event: event, done: done}:
 	case <-e.ctx.Done():
+		return context.Canceled
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+
+	select {
+	case err := <-done:
+		return err
+	case <-ctx.Done():
+		return ctx.Err()
 	}
 }
 
 func (e *Engine) Stop() {
-	e.cancel()
-	e.wg.Wait()
 	close(e.eventChan)
+	e.wg.Wait()
+	e.cancel()
 }

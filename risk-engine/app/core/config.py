@@ -31,7 +31,7 @@ class Settings(BaseSettings):
     MLFLOW_TRACKING_URI: str = "http://mlflow:5000"
 
     # IP Intelligence
-    GEO_IP_API_URL: str = "http://ip-api.com/json"
+    GEO_IP_API_URL: str = "https://ip-api.com/json"
     GEO_IP_CACHE_TTL: int = 3600
 
     # Risk thresholds
@@ -47,6 +47,9 @@ class Settings(BaseSettings):
 
     # Fail open: if ML model not loaded, skip ML score
     RISK_ENGINE_FAIL_OPEN: bool = True
+
+    ADMIN_SERVICE_TOKEN: str = ""
+    CORS_ALLOWED_ORIGINS: str = "http://localhost:3000"
 
     class Config:
         env_file = ".env"

@@ -77,7 +77,8 @@ def train_model():
     # Hit reload endpoint if running
     try:
         import httpx
-        httpx.post("http://localhost:8082/api/v1/rules/reload")
+        token = os.getenv("ADMIN_SERVICE_TOKEN", "")
+        httpx.post("http://localhost:8082/api/v1/rules/reload", headers={"X-Service-Token": token}, timeout=5.0)
         # In a real system, there would be a dedicated /model/reload endpoint.
         print("Notified Risk Engine of new model (via rules reload, as a placeholder).")
     except Exception:

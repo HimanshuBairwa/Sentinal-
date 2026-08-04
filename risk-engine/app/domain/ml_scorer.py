@@ -8,6 +8,7 @@ import shap
 from typing import Tuple, List, Dict, Optional
 from app.domain.features import Features
 from app.metrics.metrics import ML_INFERENCE_LATENCY, MODEL_LOADED
+from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -56,7 +57,9 @@ class LightGBMScorer:
         If model not loaded: returns (50.0, None) — fail open
         """
         if not self.model_loaded or self.model is None:
-            return 50.0, None
+            if not settings.RISK_ENGINE_FAIL_OPEN:
+                raise RuntimeError("risk model is unavailable")
+            return 0.0, None
 
         start = time.perf_counter()
         prob = float(self.model.predict(features.reshape(1, -1))[0])
