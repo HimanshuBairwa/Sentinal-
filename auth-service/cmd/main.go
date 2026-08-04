@@ -39,11 +39,11 @@ func main() {
 	defer redisClient.Close()
 
 	// 3. Setup Kafka Producer
-	kafkaProducer := kafka.NewProducer(cfg.KafkaBrokers, "auth.events")
+	kafkaProducer := kafka.NewProducer(cfg.KafkaBrokers, cfg.KafkaTopic)
 	defer kafkaProducer.Close()
 
 	// 4. Setup RSA Keys (Persistent)
-	privKey, err := service.LoadOrGenerateRSAKey("jwtRS256.key")
+	privKey, err := service.LoadOrGenerateRSAKey(cfg.JWTKeyPath)
 	if err != nil {
 		log.Fatalf("Failed to generate RSA key: %v", err)
 	}
@@ -53,8 +53,8 @@ func main() {
 	sessionRepo := repository.NewSessionRedis(redisClient)
 
 	// 6. Initialize Services
-	tokenService := service.NewJWTTokenService(privKey, cfg.AccessTTL, cfg.RefreshTTL, cfg.Issuer)
-	authService := service.NewAuthService(userRepo, sessionRepo, tokenService, kafkaProducer)
+	tokenService := service.NewJWTTokenService(privKey, cfg.AccessTTL, cfg.RefreshTTL, cfg.Issuer, cfg.Audience, cfg.JWTKeyID)
+	authService := service.NewAuthService(userRepo, sessionRepo, tokenService, kafkaProducer, cfg.RefreshTTL)
 
 	// 7. Initialize HTTP Handlers & Router
 	authHandler := handlers.NewAuthHandler(authService, tokenService)

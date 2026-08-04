@@ -3,7 +3,6 @@ package repository
 import (
 	"context"
 	"errors"
-	"time"
 
 	"sentinel/auth-service/internal/domain"
 
@@ -43,7 +42,7 @@ func (r *UserPostgres) Create(ctx context.Context, user *domain.User) error {
 func (r *UserPostgres) GetByEmail(ctx context.Context, email string) (*domain.User, error) {
 	query := `
 		SELECT id, email, password_hash, full_name, role, is_active, email_verified, 
-		       created_at, updated_at, last_login_at, failed_login_attempts, locked_until
+		       created_at, updated_at, last_login_at, failed_login_count, locked_until
 		FROM users WHERE email = $1
 	`
 	
@@ -65,7 +64,7 @@ func (r *UserPostgres) GetByEmail(ctx context.Context, email string) (*domain.Us
 func (r *UserPostgres) GetByID(ctx context.Context, id uuid.UUID) (*domain.User, error) {
 	query := `
 		SELECT id, email, password_hash, full_name, role, is_active, email_verified, 
-		       created_at, updated_at, last_login_at, failed_login_attempts, locked_until
+		       created_at, updated_at, last_login_at, failed_login_count, locked_until
 		FROM users WHERE id = $1
 	`
 	
@@ -87,9 +86,9 @@ func (r *UserPostgres) GetByID(ctx context.Context, id uuid.UUID) (*domain.User,
 func (r *UserPostgres) IncrementFailedLogin(ctx context.Context, email string, maxAttempts int, lockDurationMinutes int) error {
 	query := `
 		UPDATE users 
-		SET failed_login_attempts = failed_login_attempts + 1,
+		SET failed_login_count = failed_login_count + 1,
 		    locked_until = CASE 
-		        WHEN failed_login_attempts + 1 >= $1 THEN NOW() + $2 * INTERVAL '1 minute'
+		        WHEN failed_login_count + 1 >= $1 THEN NOW() + $2 * INTERVAL '1 minute'
 		        ELSE locked_until 
 		    END
 		WHERE email = $3
@@ -101,7 +100,7 @@ func (r *UserPostgres) IncrementFailedLogin(ctx context.Context, email string, m
 func (r *UserPostgres) ResetFailedLogin(ctx context.Context, id uuid.UUID) error {
 	query := `
 		UPDATE users 
-		SET failed_login_attempts = 0, locked_until = NULL
+		SET failed_login_count = 0, locked_until = NULL
 		WHERE id = $1
 	`
 	_, err := r.db.Exec(ctx, query, id)

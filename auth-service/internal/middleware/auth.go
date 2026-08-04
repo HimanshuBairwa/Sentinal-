@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strings"
 
+	"sentinel/auth-service/internal/domain"
 	"sentinel/auth-service/internal/service"
 )
 

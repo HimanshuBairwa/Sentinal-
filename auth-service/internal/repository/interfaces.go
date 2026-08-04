@@ -19,6 +19,7 @@ type UserRepository interface {
 type SessionRepository interface {
 	Create(ctx context.Context, session *domain.Session) error
 	GetByID(ctx context.Context, id uuid.UUID) (*domain.Session, error)
+	RevokeByID(ctx context.Context, id uuid.UUID) error
 	RevokeFamily(ctx context.Context, tokenFamily uuid.UUID) error
 	UpdateLastUsed(ctx context.Context, id uuid.UUID) error
 }

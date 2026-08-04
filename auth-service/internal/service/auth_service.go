@@ -2,9 +2,10 @@ package service
 
 import (
 	"context"
+	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
-	"errors"
+	"strings"
 	"time"
 
 	"sentinel/auth-service/internal/domain"
@@ -21,18 +22,24 @@ type AuthService struct {
 	sessionRepo  repository.SessionRepository
 	tokenService TokenService
 	kafkaProd    *kafka.Producer
+	refreshTTL   time.Duration
 }
 
-func NewAuthService(ur repository.UserRepository, sr repository.SessionRepository, ts TokenService, kp *kafka.Producer) *AuthService {
+func NewAuthService(ur repository.UserRepository, sr repository.SessionRepository, ts TokenService, kp *kafka.Producer, refreshTTL time.Duration) *AuthService {
 	return &AuthService{
 		userRepo:     ur,
 		sessionRepo:  sr,
 		tokenService: ts,
 		kafkaProd:    kp,
+		refreshTTL:   refreshTTL,
 	}
 }
 
 func (s *AuthService) RegisterUser(ctx context.Context, email, password, fullName string, ipAddress string) (*domain.User, error) {
+	email = strings.ToLower(strings.TrimSpace(email))
+	if !strings.Contains(email, "@") || len(email) > 255 {
+		return nil, domain.ErrInvalidEmail
+	}
 	if err := domain.ValidatePassword(password); err != nil {
 		return nil, err
 	}
@@ -48,6 +55,7 @@ func (s *AuthService) RegisterUser(ctx context.Context, email, password, fullNam
 		PasswordHash: string(hash),
 		FullName:     fullName,
 		Role:         domain.RoleUser,
+		IsActive:     true,
 	}
 
 	if err := s.userRepo.Create(ctx, user); err != nil {
@@ -70,6 +78,7 @@ func (s *AuthService) RegisterUser(ctx context.Context, email, password, fullNam
 }
 
 func (s *AuthService) Login(ctx context.Context, email, password string, ipAddress, userAgent string, deviceInfo map[string]any) (*domain.TokenPair, error) {
+	email = strings.ToLower(strings.TrimSpace(email))
 	user, err := s.userRepo.GetByEmail(ctx, email)
 	if err != nil {
 		// Prevent user enumeration by taking the same time to fail
@@ -79,6 +88,9 @@ func (s *AuthService) Login(ctx context.Context, email, password string, ipAddre
 
 	if user.IsLocked() {
 		return nil, domain.ErrAccountLocked
+	}
+	if !user.IsActive {
+		return nil, domain.ErrAccountInactive
 	}
 
 	err = bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password))
@@ -130,7 +142,7 @@ func (s *AuthService) Login(ctx context.Context, email, password string, ipAddre
 		IPAddress:        ipAddress,
 		UserAgent:        userAgent,
 		IsRevoked:        false,
-		ExpiresAt:        time.Now().Add(7 * 24 * time.Hour), // 7 days refresh TTL
+		ExpiresAt:        time.Now().Add(s.refreshTTL),
 		CreatedAt:        time.Now(),
 		LastUsedAt:       time.Now(),
 	}
@@ -151,4 +163,39 @@ func (s *AuthService) Login(ctx context.Context, email, password string, ipAddre
 	}
 
 	return tokenPair, nil
+}
+
+func (s *AuthService) Refresh(ctx context.Context, refreshToken string) (*domain.TokenPair, error) {
+	sessionID, err := s.tokenService.ValidateRefreshToken(refreshToken)
+	if err != nil {
+		return nil, domain.ErrInvalidRefresh
+	}
+	session, err := s.sessionRepo.GetByID(ctx, sessionID)
+	if err != nil || session.IsRevoked || session.ExpiresAt.Before(time.Now()) {
+		return nil, domain.ErrInvalidRefresh
+	}
+	hash := sha256.Sum256([]byte(refreshToken))
+	if !hmac.Equal([]byte(hex.EncodeToString(hash[:])), []byte(session.RefreshTokenHash)) {
+		_ = s.sessionRepo.RevokeFamily(ctx, session.TokenFamily)
+		return nil, domain.ErrRefreshReuse
+	}
+	user, err := s.userRepo.GetByID(ctx, session.UserID)
+	if err != nil || !user.IsActive {
+		return nil, domain.ErrInvalidRefresh
+	}
+	newPair, err := s.tokenService.GenerateTokenPair(user, session.ID)
+	if err != nil {
+		return nil, err
+	}
+	newHash := sha256.Sum256([]byte(newPair.RefreshToken))
+	session.RefreshTokenHash = hex.EncodeToString(newHash[:])
+	session.LastUsedAt = time.Now().UTC()
+	if err := s.sessionRepo.Create(ctx, session); err != nil {
+		return nil, err
+	}
+	return newPair, nil
+}
+
+func (s *AuthService) Logout(ctx context.Context, sessionID uuid.UUID) error {
+	return s.sessionRepo.RevokeByID(ctx, sessionID)
 }

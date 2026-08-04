@@ -3,10 +3,12 @@ package handlers
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 
 	"sentinel/auth-service/internal/domain"
 	"sentinel/auth-service/internal/middleware"
 	"sentinel/auth-service/internal/service"
+	"github.com/google/uuid"
 )
 
 type AuthHandler struct {
@@ -39,7 +41,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 
 	user, err := h.authService.RegisterUser(r.Context(), req.Email, req.Password, req.FullName, ipAddress)
 	if err != nil {
-		if err == domain.ErrWeakPassword {
+		if err == domain.ErrWeakPassword || err == domain.ErrInvalidEmail {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
@@ -73,7 +75,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 
 	tokenPair, err := h.authService.Login(r.Context(), req.Email, req.Password, ipAddress, r.UserAgent(), deviceInfo)
 	if err != nil {
-		if err == domain.ErrInvalidPassword || err == domain.ErrAccountLocked {
+		if err == domain.ErrInvalidPassword || err == domain.ErrAccountLocked || err == domain.ErrAccountInactive {
 			http.Error(w, err.Error(), http.StatusUnauthorized)
 			return
 		}
@@ -83,6 +85,40 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(tokenPair)
+}
+
+type RefreshRequest struct {
+	RefreshToken string `json:"refresh_token"`
+}
+
+func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
+	var req RefreshRequest
+	r.Body = http.MaxBytesReader(w, r.Body, 64*1024)
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || strings.TrimSpace(req.RefreshToken) == "" {
+		http.Error(w, "invalid refresh request", http.StatusBadRequest)
+		return
+	}
+	pair, err := h.authService.Refresh(r.Context(), req.RefreshToken)
+	if err != nil {
+		http.Error(w, "invalid or expired refresh token", http.StatusUnauthorized)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(pair)
+}
+
+func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
+	claims, ok := r.Context().Value(middleware.ClaimsKey).(*domain.CustomClaims)
+	if !ok {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+	sessionID, err := uuid.Parse(claims.SessionID)
+	if err != nil || h.authService.Logout(r.Context(), sessionID) != nil {
+		http.Error(w, "logout failed", http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {

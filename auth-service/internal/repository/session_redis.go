@@ -65,6 +65,23 @@ func (r *SessionRedis) GetByID(ctx context.Context, id uuid.UUID) (*domain.Sessi
 	return &session, nil
 }
 
+func (r *SessionRedis) RevokeByID(ctx context.Context, id uuid.UUID) error {
+	session, err := r.GetByID(ctx, id)
+	if err != nil {
+		return err
+	}
+	session.IsRevoked = true
+	data, err := json.Marshal(session)
+	if err != nil {
+		return err
+	}
+	ttl := time.Until(session.ExpiresAt)
+	if ttl <= 0 {
+		return r.client.Del(ctx, sessionKeyPrefix+id.String()).Err()
+	}
+	return r.client.Set(ctx, sessionKeyPrefix+id.String(), data, ttl).Err()
+}
+
 func (r *SessionRedis) RevokeFamily(ctx context.Context, tokenFamily uuid.UUID) error {
 	familyKey := familyKeyPrefix + tokenFamily.String()
 	
@@ -92,8 +109,18 @@ func (r *SessionRedis) RevokeFamily(ctx context.Context, tokenFamily uuid.UUID) 
 }
 
 func (r *SessionRedis) UpdateLastUsed(ctx context.Context, id uuid.UUID) error {
-	// To avoid marshaling and unmarshaling on every request, we just touch the expiry
-	// Actually, last_used_at might need to be precise, but updating Redis on every request is heavy.
-	// For now, we update the expiration slightly. This is a fast-path stub.
-	return nil
+	session, err := r.GetByID(ctx, id)
+	if err != nil {
+		return err
+	}
+	session.LastUsedAt = time.Now().UTC()
+	data, err := json.Marshal(session)
+	if err != nil {
+		return err
+	}
+	ttl := time.Until(session.ExpiresAt)
+	if ttl <= 0 {
+		return r.client.Del(ctx, sessionKeyPrefix+id.String()).Err()
+	}
+	return r.client.Set(ctx, sessionKeyPrefix+id.String(), data, ttl).Err()
 }

@@ -35,7 +35,10 @@ var (
 	ErrInvalidEmail    = errors.New("invalid email format")
 	ErrWeakPassword    = errors.New("password must be at least 12 characters, with 1 uppercase, 1 lowercase, 1 digit, and 1 special character")
 	ErrAccountLocked   = errors.New("account is locked due to multiple failed login attempts")
+	ErrAccountInactive = errors.New("account is inactive")
 	ErrInvalidPassword = errors.New("invalid email or password")
+	ErrInvalidRefresh  = errors.New("invalid or expired refresh token")
+	ErrRefreshReuse    = errors.New("refresh token reuse detected")
 
 	hasUpperRegex   = regexp.MustCompile(`[A-Z]`)
 	hasLowerRegex   = regexp.MustCompile(`[a-z]`)

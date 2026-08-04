@@ -27,12 +27,14 @@ func NewRouter(authHandler *AuthHandler, tokenService service.TokenService) http
 		// Public routes
 		r.Post("/register", authHandler.Register)
 		r.Post("/login", authHandler.Login)
+		r.Post("/refresh", authHandler.Refresh)
 		r.Get("/public-key", authHandler.PublicKey)
 
 		// Protected routes
 		r.Group(func(r chi.Router) {
 			r.Use(middleware.RequireAuth(tokenService))
 			r.Get("/me", authHandler.Me)
+			r.Post("/logout", authHandler.Logout)
 			
 			// Admin only route example
 			r.Group(func(r chi.Router) {

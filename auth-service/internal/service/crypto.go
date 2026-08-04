@@ -7,12 +7,16 @@ import (
 	"encoding/pem"
 	"errors"
 	"os"
+	filepathpkg "path/filepath"
 )
 
 // LoadOrGenerateRSAKey loads an RSA private key from a PEM file.
 // If the file does not exist, it generates a new key pair and saves it.
 func LoadOrGenerateRSAKey(filepath string) (*rsa.PrivateKey, error) {
 	if _, err := os.Stat(filepath); os.IsNotExist(err) {
+		if err := os.MkdirAll(filepathpkg.Dir(filepath), 0700); err != nil {
+			return nil, err
+		}
 		// Generate new key
 		privKey, err := rsa.GenerateKey(rand.Reader, 2048)
 		if err != nil {
