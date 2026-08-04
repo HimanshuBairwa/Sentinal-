@@ -4,7 +4,15 @@ import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ShieldCheck, Loader2 } from "lucide-react";
 
-const API_URL = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080").replace(/\/$/, "");
+const configuredAPIURL = (process.env.NEXT_PUBLIC_API_URL ?? "").replace(/\/$/, "");
+
+function getAPIURL(): string {
+  if (configuredAPIURL && configuredAPIURL !== "http://localhost:8080") return configuredAPIURL;
+  if (typeof window === "undefined") return configuredAPIURL || "http://localhost:8080";
+  const { protocol, hostname } = window.location;
+  if (hostname.includes("-3000.")) return `${protocol}//${hostname.replace("-3000.", "-8080.")}`;
+  return `${protocol}//${hostname}:8080`;
+}
 
 export default function LoginPage() {
   const router = useRouter();
@@ -18,7 +26,7 @@ export default function LoginPage() {
     setLoading(true);
     setError(null);
     try {
-      const response = await fetch(`${API_URL}/api/v1/auth/login`, {
+      const response = await fetch(`${getAPIURL()}/api/v1/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),

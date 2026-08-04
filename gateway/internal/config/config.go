@@ -16,6 +16,7 @@ type Config struct {
 	JWTIssuer         string
 	JWTAudience       string
 	TrustProxy        bool
+	CORSAllowedOrigins []string
 }
 
 func LoadConfig() *Config {
@@ -60,7 +61,19 @@ func LoadConfig() *Config {
 		JWTIssuer:         getEnv("JWT_ISSUER", "sentinel-auth-service"),
 		JWTAudience:       getEnv("JWT_AUDIENCE", "sentinel-api"),
 		TrustProxy:        strings.EqualFold(getEnv("TRUST_PROXY", "false"), "true"),
+		CORSAllowedOrigins: splitCSV(getEnv("CORS_ALLOWED_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000")),
 	}
+}
+
+func splitCSV(value string) []string {
+	parts := strings.Split(value, ",")
+	result := make([]string, 0, len(parts))
+	for _, part := range parts {
+		if value := strings.TrimSpace(part); value != "" {
+			result = append(result, value)
+		}
+	}
+	return result
 }
 
 func getEnv(key, fallback string) string {

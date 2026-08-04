@@ -27,7 +27,17 @@ export type AnalyticsMetrics = {
   systemLoad: number;
 };
 
-const API_URL = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080").replace(/\/$/, "");
+const configuredAPIURL = (process.env.NEXT_PUBLIC_API_URL ?? "").replace(/\/$/, "");
+
+function getAPIURL(): string {
+  if (configuredAPIURL && configuredAPIURL !== "http://localhost:8080") return configuredAPIURL;
+  if (typeof window === "undefined") return configuredAPIURL || "http://localhost:8080";
+  const { protocol, hostname } = window.location;
+  if (hostname.includes("-3000.")) {
+    return `${protocol}//${hostname.replace("-3000.", "-8080.")}`;
+  }
+  return `${protocol}//${hostname}:8080`;
+}
 
 function authHeaders(): HeadersInit {
   const token = typeof window === "undefined" ? null : window.localStorage.getItem("sentinel_access_token");
@@ -39,7 +49,7 @@ async function fetchWithRefresh(input: RequestInfo, init: RequestInit = {}): Pro
   if (response.status !== 401 || typeof window === "undefined") return response;
   const refreshToken = window.localStorage.getItem("sentinel_refresh_token");
   if (!refreshToken) return response;
-  const refresh = await fetch(`${API_URL}/api/v1/auth/refresh`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ refresh_token: refreshToken }) });
+  const refresh = await fetch(`${getAPIURL()}/api/v1/auth/refresh`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ refresh_token: refreshToken }) });
   if (!refresh.ok) return response;
   const pair = await refresh.json() as { access_token: string; refresh_token: string };
   window.localStorage.setItem("sentinel_access_token", pair.access_token);
@@ -49,7 +59,7 @@ async function fetchWithRefresh(input: RequestInfo, init: RequestInit = {}): Pro
 
 function websocketURL(): string | null {
   if (typeof window === "undefined") return null;
-  const base = API_URL.replace(/^http/, "ws");
+  const base = getAPIURL().replace(/^http/, "ws");
   const token = window.localStorage.getItem("sentinel_access_token");
   return token ? `${base}/api/v1/analytics/ws?access_token=${encodeURIComponent(token)}` : null;
 }
@@ -63,8 +73,8 @@ export function useAnalytics() {
   const refresh = useCallback(async () => {
     try {
       const [overviewResponse, eventsResponse] = await Promise.all([
-        fetchWithRefresh(`${API_URL}/api/v1/analytics/overview`, { cache: "no-store" }),
-        fetchWithRefresh(`${API_URL}/api/v1/analytics/events?limit=50`, { cache: "no-store" }),
+        fetchWithRefresh(`${getAPIURL()}/api/v1/analytics/overview`, { cache: "no-store" }),
+        fetchWithRefresh(`${getAPIURL()}/api/v1/analytics/events?limit=50`, { cache: "no-store" }),
       ]);
       if (!overviewResponse.ok || !eventsResponse.ok) throw new Error("Analytics API unavailable");
       setOverview((await overviewResponse.json()) as AnalyticsOverview);

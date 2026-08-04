@@ -18,5 +18,12 @@
       ]
     }
   },
-  "postCreateCommand": "cp .env.example .env"
+  "forwardPorts": [3000, 8080, 3001, 16686],
+  "portsAttributes": {
+    "3000": { "label": "Sentinel Dashboard", "onAutoForward": "openBrowser" },
+    "8080": { "label": "Sentinel API Gateway", "onAutoForward": "notify" },
+    "3001": { "label": "Grafana", "onAutoForward": "notify" },
+    "16686": { "label": "Jaeger", "onAutoForward": "notify" }
+  },
+  "postCreateCommand": "test -f .env || cp .env.example .env"
 }
