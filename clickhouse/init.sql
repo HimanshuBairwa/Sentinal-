@@ -19,6 +19,25 @@ ORDER BY (date, service_name, timestamp)
 TTL date + INTERVAL 90 DAY
 SETTINGS index_granularity = 8192;
 
+CREATE TABLE IF NOT EXISTS events (
+    id String,
+    event_id String,
+    session_id String,
+    user_id String,
+    event_type LowCardinality(String),
+    producer LowCardinality(String),
+    payload String,
+    ip_address String,
+    user_agent String,
+    request_id String,
+    action LowCardinality(String),
+    risk_score Float32,
+    timestamp DateTime('UTC')
+) ENGINE = MergeTree()
+PARTITION BY toYYYYMM(timestamp)
+ORDER BY (timestamp, event_type, user_id)
+TTL timestamp + INTERVAL 90 DAY;
+
 CREATE MATERIALIZED VIEW IF NOT EXISTS api_metrics_per_minute
 ENGINE = AggregatingMergeTree()
 ORDER BY (service_name, endpoint, minute)

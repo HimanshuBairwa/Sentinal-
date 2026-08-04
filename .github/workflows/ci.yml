@@ -1,0 +1,49 @@
+name: Sentinel CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  dashboard:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: dashboard
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: dashboard/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run build
+
+  python:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: risk-engine
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install -r requirements.txt
+      - run: python -m compileall -q app tests
+      - run: pytest -q
+
+  go:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [gateway, auth-service, analytics-service, alert-service]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+      - run: go test -race -count=1 ./...
+        working-directory: ${{ matrix.service }}

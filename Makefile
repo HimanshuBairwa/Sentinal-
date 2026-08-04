@@ -1,4 +1,4 @@
-.PHONY: up down build logs test lint migrate seed generate train load-test k8s-deploy tf-plan
+.PHONY: up down clean build logs test lint migrate seed generate train load-test k8s-deploy tf-plan
 
 up:
 	docker compose up -d --build
@@ -10,6 +10,9 @@ up:
 	@echo "  Prometheus   → http://localhost:9090"
 
 down:
+	docker compose down
+
+clean:
 	docker compose down -v
 
 build:
@@ -42,13 +45,9 @@ migrate:
 
 seed:
 	docker compose exec risk-engine python scripts/seed_rules.py
-	docker compose exec auth-service ./scripts/seed_test_users.sh
 
 generate:
-	docker compose exec risk-engine python scripts/generate_fraud_data.py
-	@echo "Generated 100K synthetic fraud events at /data/fraud_dataset_100k.csv"
+	@echo "Synthetic data generation is intentionally explicit; add a dataset job before running this target."
 
 train:
-	docker compose exec risk-engine python ml/trainer.py \
-		--data /data/fraud_dataset_100k.csv \
-		--experiment SENTINEL-LightGBM
+	docker compose exec risk-engine python ml/train.py
