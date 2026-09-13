@@ -9,7 +9,7 @@ import { Gauge } from "../components/ui/Gauge";
 import { useLive } from "../components/live/LiveContext";
 import { TransactionAreaChart } from "../components/charts/TransactionAreaChart";
 import { LiveThreatFeed } from "../components/feed/LiveThreatFeed";
-import { WorldThreatMap } from "../components/map/WorldThreatMap";
+import { WorldThreatMap, type MapThreat } from "../components/map/WorldThreatMap";
 import { motion } from "framer-motion";
 
 const COUNTRY_COORDS: Record<string, [number, number]> = {
@@ -25,28 +25,29 @@ export default function CommandCenter() {
 
   // Map threats derived from the live event stream (same logic as threats page).
   const mapThreats = events
-    .filter((e) => {
-      const country = (e as { country?: string; country_code?: string }).country ??
-        (e as { country_code?: string }).country_code;
-      return country ? COUNTRY_COORDS[country.toUpperCase()] : false;
-    })
-    .slice(0, 12)
-    .map((e) => {
-      const country = ((e as { country?: string }).country ??
-        (e as { country_code?: string }).country_code ?? "").toUpperCase();
-      const [lat, lon] = COUNTRY_COORDS[country];
+    .map((e): MapThreat | null => {
       const key = e.ip_address ?? e.event_id ?? "anon";
+      const directLat = (e as { lat?: number }).lat;
+      const directLon = (e as { lon?: number }).lon;
+      const code = ((e as { country_code?: string }).country_code ?? "").toUpperCase();
+      const name = ((e as { country?: string }).country ?? "").toUpperCase();
+      const base = Number.isFinite(directLat) && Number.isFinite(directLon)
+        ? [directLat!, directLon!]
+        : COUNTRY_COORDS[code] ?? COUNTRY_COORDS[name];
+      if (!base) return null;
       let h = 0;
       for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) | 0;
       return {
         id: e.id ?? e.event_id ?? key,
-        lat: lat + (((Math.abs(h) % 100) / 100) - 0.5) * 8,
-        lon: lon + ((((Math.abs(h) >> 5) % 100) / 100) - 0.5) * 8,
+        lat: base[0] + (((Math.abs(h) % 100) / 100) - 0.5) * 3,
+        lon: base[1] + ((((Math.abs(h) >> 5) % 100) / 100) - 0.5) * 3,
         score: e.risk_score ?? 0,
         action: e.action ?? "ALLOW",
         label: e.ip_address ?? undefined,
       };
-    });
+    })
+    .filter((t): t is MapThreat => t !== null)
+    .slice(0, 12);
 
   return (
     <div className="mx-auto max-w-[1600px] space-y-6 p-6 pb-10 lg:p-8">

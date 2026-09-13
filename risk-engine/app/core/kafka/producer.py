@@ -44,6 +44,10 @@ class RiskDecisionProducer:
                 "triggered_rules": decision.triggered_rules,
                 "shap_top5": decision.shap_top5,
                 "processing_time_ms": decision.processing_time_ms,
+                "country": decision.country,
+                "country_code": decision.country_code,
+                "lat": decision.lat,
+                "lon": decision.lon,
                 "timestamp": datetime.utcnow().isoformat() + "Z",
                 "occurred_at": datetime.utcnow().isoformat() + "Z",
                 "data": {

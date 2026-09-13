@@ -124,13 +124,32 @@ const SERVICES: ServiceRow[] = [
 type ProbeState = Record<string, { status: ServiceStatus; detail?: string; latencyMs: number }>;
 
 export default function SystemPage() {
-  const { isConnected, error, events, lastEventAt } = useLive();
+  const { isConnected, error, events, lastEventAt, demo } = useLive();
   const [probes, setProbes] = useState<ProbeState>({});
   const [probing, setProbing] = useState(false);
   const [nowTs, setNowTs] = useState(() => Date.now());
 
+  // Deterministic simulated probe results for demo mode (public deploy without
+  // a backend) — realistic latencies, one service subtly degraded so the
+  // severity visuals still demonstrate themselves.
+  const demoProbes = useCallback((): ProbeState => ({
+    gateway: { status: "ok", detail: "Simulated · routing 100% of traffic", latencyMs: 24 },
+    auth: { status: "ok", detail: "Simulated · RS256 keys rotating", latencyMs: 31 },
+    analytics: { status: "ok", detail: "Simulated · batch inserts flowing", latencyMs: 42 },
+    websocket: { status: "ok", detail: "Simulated stream · 1.4s cadence", latencyMs: 0 },
+    clickhouse: { status: "degraded", detail: "Simulated · 2 of 3 replicas healthy", latencyMs: 12 },
+    risk: { status: "ok", detail: `Simulated · ${events.length} events in window`, latencyMs: 18 },
+  }), [events.length]);
+
   const runProbes = useCallback(async () => {
     setProbing(true);
+    if (demo) {
+      // Demo deploy: no real services to probe — present the simulation.
+      setProbes(demoProbes());
+      setNowTs(Date.now());
+      setProbing(false);
+      return;
+    }
     const next: ProbeState = {};
     // Probe all services concurrently — total wall time = slowest probe,
     // not the sum (previously 3x serialized round-trips).
@@ -158,7 +177,7 @@ export default function SystemPage() {
     setProbes(next);
     setNowTs(Date.now());
     setProbing(false);
-  }, [isConnected, events.length]);
+  }, [isConnected, events.length, demo, demoProbes]);
 
   useEffect(() => {
     const kick = () => void runProbes();
@@ -198,7 +217,7 @@ export default function SystemPage() {
             )}
           >
             {overall === "down" ? <WifiOff className="h-4 w-4" /> : <Wifi className="h-4 w-4" />}
-            {overall === "checking" ? "PROBING…" : overall.toUpperCase()}
+            {demo ? "SIMULATED" : overall === "checking" ? "PROBING…" : overall.toUpperCase()}
           </div>
           <button
             onClick={() => void runProbes()}

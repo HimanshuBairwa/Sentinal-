@@ -16,6 +16,12 @@ class RiskDecision:
     triggered_rules: List[str]
     shap_top5: Optional[List[Dict]]
     processing_time_ms: float = 0.0
+    # Geo passthrough: published with the decision so the analytics live
+    # stream and dashboard threat map get country/lat/lon without re-lookup.
+    country: str = ""
+    country_code: str = ""
+    lat: float = 0.0
+    lon: float = 0.0
 
     def to_response(self) -> dict:
         return {
@@ -81,6 +87,10 @@ class RiskAggregator:
             },
             triggered_rules=triggered_rules,
             shap_top5=shap_top5,
+            country=request.geo.country_name,
+            country_code=request.geo.country_code,
+            lat=request.geo.lat,
+            lon=request.geo.lon,
         )
 
 def get_risk_aggregator() -> RiskAggregator:

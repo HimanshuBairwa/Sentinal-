@@ -28,6 +28,15 @@ const COUNTRY_COORDS: Record<string, [number, number]> = {
   ID: [-0.8, 113.9], TR: [38.9, 35.2], KR: [35.9, 127.8], MX: [23.6, -102.5],
 };
 
+// Resolve coordinates for an event: prefer ISO code, fall back to full name.
+function resolveCoords(e: { country?: string; country_code?: string }): [number, number] | undefined {
+  const code = e.country_code?.toUpperCase();
+  if (code && COUNTRY_COORDS[code]) return COUNTRY_COORDS[code];
+  const name = e.country?.toUpperCase();
+  if (name && COUNTRY_COORDS[name]) return COUNTRY_COORDS[name];
+  return undefined;
+}
+
 type GeoThreat = MapThreat & { ip: string; time: string };
 
 export default function ThreatsPage() {
@@ -54,19 +63,25 @@ export default function ThreatsPage() {
     for (const e of events) {
       const key = e.ip_address ?? e.event_id ?? "anon";
       if (seen.has(key)) continue;
-      const country = (e as { country?: string; country_code?: string }).country ??
-        (e as { country_code?: string }).country_code;
-      const coords = country ? COUNTRY_COORDS[country.toUpperCase()] : undefined;
-      if (!coords) continue;
       const score = e.risk_score ?? 0;
       if (mapFilter === "blocked" && e.action !== "BLOCK") continue;
+
+      // Position: prefer explicit lat/lon (demo events + enriched real
+      // events), fall back to country lookup (ISO code first, then name).
+      const directLat = (e as { lat?: number }).lat;
+      const directLon = (e as { lon?: number }).lon;
+      const coords = Number.isFinite(directLat) && Number.isFinite(directLon)
+        ? [directLat!, directLon!]
+        : resolveCoords(e as { country?: string; country_code?: string });
+      if (!coords) continue;
       seen.add(key);
+
       // Deterministic jitter from a hash of the key so markers for the same
       // country don't perfectly overlap, without impure Math.random in render.
       let h = 0;
       for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) | 0;
-      const jitter = ((Math.abs(h) % 100) / 100 - 0.5) * 8;
-      const jitter2 = (((Math.abs(h) >> 5) % 100) / 100 - 0.5) * 8;
+      const jitter = ((Math.abs(h) % 100) / 100 - 0.5) * 3;
+      const jitter2 = (((Math.abs(h) >> 5) % 100) / 100 - 0.5) * 3;
       out.push({
         id: e.id ?? e.event_id ?? key,
         lat: coords[0] + jitter,

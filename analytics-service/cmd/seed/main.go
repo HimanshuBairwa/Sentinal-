@@ -20,17 +20,21 @@ import (
 // and country data for the geo endpoint.
 
 type geo struct {
-	country string
-	lat     float64
-	lon     float64
+	name string
+	code string
+	lat  float64
+	lon  float64
 }
 
 var countries = []geo{
-	{"US", 39.8, -98.6}, {"GB", 54.0, -2.0}, {"CA", 56.1, -106.3},
-	{"IN", 20.6, 78.9}, {"CN", 35.9, 104.2}, {"BR", -14.2, -51.9},
-	{"RU", 61.5, 105.3}, {"DE", 51.2, 10.4}, {"FR", 46.2, 2.2},
-	{"JP", 36.2, 138.3}, {"NL", 52.1, 5.3}, {"SG", 1.35, 103.8},
-	{"NG", 9.1, 8.7}, {"VN", 14.1, 108.3}, {"TR", 38.9, 35.2},
+	{"United States", "US", 39.8, -98.6}, {"United Kingdom", "GB", 54.0, -2.0},
+	{"Canada", "CA", 56.1, -106.3}, {"India", "IN", 20.6, 78.9},
+	{"China", "CN", 35.9, 104.2}, {"Brazil", "BR", -14.2, -51.9},
+	{"Russia", "RU", 61.5, 105.3}, {"Germany", "DE", 51.2, 10.4},
+	{"France", "FR", 46.2, 2.2}, {"Japan", "JP", 36.2, 138.3},
+	{"Netherlands", "NL", 52.1, 5.3}, {"Singapore", "SG", 1.35, 103.8},
+	{"Nigeria", "NG", 9.1, 8.7}, {"Vietnam", "VN", 14.1, 108.3},
+	{"Turkey", "TR", 38.9, 35.2},
 }
 
 // Event types matching what the analytics consumers and rules engine use.
@@ -98,7 +102,7 @@ func main() {
 
 		payload := fmt.Sprintf(
 			`{"risk_score": %.2f, "action": "%s", "country": "%s", "country_code": "%s", "lat": %.2f, "lon": %.2f}`,
-			score, action, g.country, g.country, g.lat, g.lon,
+			score, action, g.name, g.code, g.lat, g.lon,
 		)
 
 		event := &models.Event{

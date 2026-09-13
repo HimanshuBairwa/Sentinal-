@@ -15,7 +15,7 @@ import {
 import { BarChart3, TrendingUp, TrendingDown, ActivitySquare, MapPin } from "lucide-react";
 
 export default function AnalyticsPage() {
-  const { metrics, history, events, error } = useLive();
+  const { metrics, history, events, error, demo } = useLive();
 
   // Real ClickHouse rollups (24h hourly buckets, geo distribution, top sources)
   const [fraudRateSeries, setFraudRateSeries] = useState<FraudRatePoint[]>([]);
@@ -99,7 +99,9 @@ export default function AnalyticsPage() {
         <BarChart3 className="h-8 w-8 text-fuchsia-500 drop-shadow-[0_0_10px_rgba(217,70,239,0.8)]" />
         <div>
           <h1 className="text-3xl font-bold text-white drop-shadow-md">Analytics Deep-Dive</h1>
-          <p className="text-sm text-slate-400">24-hour ClickHouse rollups · auto-refresh 60s</p>
+          <p className="text-sm text-slate-400">
+            {demo ? "Simulated rollups (demo mode) · auto-refresh 60s" : "24-hour ClickHouse rollups · auto-refresh 60s"}
+          </p>
         </div>
       </div>
       {error && (

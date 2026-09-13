@@ -29,6 +29,8 @@ export type DemoEvent = {
   risk_score?: number;
   country_code?: string;
   country?: string;
+  lat?: number;
+  lon?: number;
 };
 
 // ---------------------------------------------------------------------------
@@ -49,27 +51,27 @@ function mulberry32(seed: number) {
 // Vocabularies (modeled on the real seed data)
 // ---------------------------------------------------------------------------
 
-const COUNTRY_POOL: { code: string; name: string; weight: number }[] = [
-  { code: "US", name: "United States", weight: 24 },
-  { code: "GB", name: "United Kingdom", weight: 10 },
-  { code: "IN", name: "India", weight: 9 },
-  { code: "DE", name: "Germany", weight: 7 },
-  { code: "BR", name: "Brazil", weight: 7 },
-  { code: "CN", name: "China", weight: 6 },
-  { code: "RU", name: "Russia", weight: 6 },
-  { code: "NL", name: "Netherlands", weight: 5 },
-  { code: "FR", name: "France", weight: 5 },
-  { code: "SG", name: "Singapore", weight: 4 },
-  { code: "JP", name: "Japan", weight: 4 },
-  { code: "NG", name: "Nigeria", weight: 3 },
-  { code: "VN", name: "Vietnam", weight: 3 },
-  { code: "TR", name: "Turkey", weight: 2 },
-  { code: "ID", name: "Indonesia", weight: 2 },
-  { code: "AU", name: "Australia", weight: 2 },
-  { code: "KR", name: "South Korea", weight: 2 },
-  { code: "ZA", name: "South Africa", weight: 1 },
-  { code: "MX", name: "Mexico", weight: 2 },
-  { code: "CA", name: "Canada", weight: 3 },
+const COUNTRY_POOL: { code: string; name: string; weight: number; lat: number; lon: number }[] = [
+  { code: "US", name: "United States", weight: 24, lat: 39.8, lon: -98.6 },
+  { code: "GB", name: "United Kingdom", weight: 10, lat: 54.0, lon: -2.0 },
+  { code: "IN", name: "India", weight: 9, lat: 20.6, lon: 78.9 },
+  { code: "DE", name: "Germany", weight: 7, lat: 51.2, lon: 10.4 },
+  { code: "BR", name: "Brazil", weight: 7, lat: -14.2, lon: -51.9 },
+  { code: "CN", name: "China", weight: 6, lat: 35.9, lon: 104.2 },
+  { code: "RU", name: "Russia", weight: 6, lat: 61.5, lon: 105.3 },
+  { code: "NL", name: "Netherlands", weight: 5, lat: 52.1, lon: 5.3 },
+  { code: "FR", name: "France", weight: 5, lat: 46.2, lon: 2.2 },
+  { code: "SG", name: "Singapore", weight: 4, lat: 1.35, lon: 103.8 },
+  { code: "JP", name: "Japan", weight: 4, lat: 36.2, lon: 138.3 },
+  { code: "NG", name: "Nigeria", weight: 3, lat: 9.1, lon: 8.7 },
+  { code: "VN", name: "Vietnam", weight: 3, lat: 14.1, lon: 108.3 },
+  { code: "TR", name: "Turkey", weight: 2, lat: 38.9, lon: 35.2 },
+  { code: "ID", name: "Indonesia", weight: 2, lat: -0.8, lon: 113.9 },
+  { code: "AU", name: "Australia", weight: 2, lat: -25.3, lon: 133.8 },
+  { code: "KR", name: "South Korea", weight: 2, lat: 35.9, lon: 127.8 },
+  { code: "ZA", name: "South Africa", weight: 1, lat: -30.6, lon: 22.9 },
+  { code: "MX", name: "Mexico", weight: 2, lat: 23.6, lon: -102.5 },
+  { code: "CA", name: "Canada", weight: 3, lat: 56.1, lon: -106.3 },
 ];
 
 const EVENT_TYPES: { type: string; weight: number }[] = [
@@ -126,6 +128,10 @@ function generateEvent(rand: () => number): DemoEvent {
   seq += 1;
   const id = `demo-${Date.now().toString(36)}-${seq}`;
 
+  // Jitter within the country so markers for one nation don't stack on a point.
+  const jLat = (rand() - 0.5) * 6;
+  const jLon = (rand() - 0.5) * 6;
+
   return {
     id,
     event_id: id,
@@ -137,6 +143,8 @@ function generateEvent(rand: () => number): DemoEvent {
     risk_score: Math.round(score * 10) / 10,
     country_code: country.code,
     country: country.name,
+    lat: country.lat + jLat,
+    lon: country.lon + jLon,
   };
 }
 
@@ -251,4 +259,50 @@ export function demoGeo(): { country: string; count: number }[] {
   return [...totals.entries()]
     .map(([country, count]) => ({ country, count }))
     .sort((a, b) => b.count - a.count);
+}
+
+/**
+ * Demo 24h hourly fraud-rate rollup — mirrors the ClickHouse
+ * `/api/v1/analytics/fraud-rate` shape with a realistic diurnal curve
+ * (volume dips overnight, fraud spikes during attack windows).
+ */
+export function demoFraudRate(): { time_bucket: string; total: number; fraud: number }[] {
+  const rand = mulberry32(2024);
+  const out: { time_bucket: string; total: number; fraud: number }[] = [];
+  const now = Date.now();
+  for (let i = 23; i >= 0; i--) {
+    const hourStart = now - i * 3_600_000;
+    // Diurnal pattern: low 2-6am, peaks 11am & 8pm (local-ish), plus noise.
+    const hourOfDay = new Date(hourStart).getHours();
+    const diurnal =
+      hourOfDay >= 2 && hourOfDay <= 6 ? 0.45
+      : hourOfDay >= 10 && hourOfDay <= 13 ? 1.35
+      : hourOfDay >= 19 && hourOfDay <= 22 ? 1.5
+      : 1.0;
+    const total = Math.round((380 + rand() * 240) * diurnal);
+    // Fraud share: normally 1-2%, with two attack bursts.
+    const attackBurst = i === 17 || i === 6 ? 3.1 : 1;
+    const fraud = Math.max(1, Math.round(total * (0.011 + rand() * 0.012) * attackBurst));
+    out.push({
+      time_bucket: new Date(hourStart).toISOString(),
+      total,
+      fraud,
+    });
+  }
+  return out;
+}
+
+/**
+ * Demo top threat sources — mirrors the ClickHouse `/top-threats` shape.
+ * Datacenter-style IPs with attack-volume counts.
+ */
+export function demoTopThreats(): { threat_source: string; attempt_count: number }[] {
+  const rand = mulberry32(777);
+  const ips = [
+    "185.220.101.34", "45.132.8.91", "91.219.237.14", "194.26.29.156",
+    "62.171.177.80", "159.223.44.19", "51.15.203.201", "103.4.217.7",
+  ];
+  return ips
+    .map((ip) => ({ threat_source: ip, attempt_count: Math.round(40 + rand() * 460) }))
+    .sort((a, b) => b.attempt_count - a.attempt_count);
 }

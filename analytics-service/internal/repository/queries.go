@@ -124,9 +124,16 @@ func (r *clickHouseRepoImpl) GetLatency(ctx context.Context) (map[string]interfa
 }
 
 func (r *clickHouseRepoImpl) GetEvents(ctx context.Context, limit, offset int) ([]*models.Event, error) {
+	// payload JSON is parsed server-side so the dashboard receives typed
+	// geo fields (country/country_code/lat/lon) instead of a raw string it
+	// can't use for the threat map. ClickHouse does the extraction at read time.
 	query := `
 		SELECT id, event_id, session_id, user_id, event_type, producer, payload,
-		       ip_address, user_agent, request_id, action, risk_score, timestamp
+		       ip_address, user_agent, request_id, action, risk_score, timestamp,
+		       JSONExtractString(payload, 'country') AS country,
+		       JSONExtractString(payload, 'country_code') AS country_code,
+		       JSONExtractFloat(payload, 'lat') AS lat,
+		       JSONExtractFloat(payload, 'lon') AS lon
 		FROM events
 		ORDER BY timestamp DESC
 		LIMIT ? OFFSET ?
@@ -140,7 +147,7 @@ func (r *clickHouseRepoImpl) GetEvents(ctx context.Context, limit, offset int) (
 	var events []*models.Event
 	for rows.Next() {
 		var e models.Event
-		if err := rows.Scan(&e.ID, &e.EventID, &e.SessionID, &e.UserID, &e.EventType, &e.Producer, &e.Payload, &e.IPAddress, &e.UserAgent, &e.RequestID, &e.Action, &e.RiskScore, &e.Timestamp); err != nil {
+		if err := rows.Scan(&e.ID, &e.EventID, &e.SessionID, &e.UserID, &e.EventType, &e.Producer, &e.Payload, &e.IPAddress, &e.UserAgent, &e.RequestID, &e.Action, &e.RiskScore, &e.Timestamp, &e.Country, &e.CountryCode, &e.Lat, &e.Lon); err != nil {
 			return nil, err
 		}
 		events = append(events, &e)

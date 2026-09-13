@@ -72,6 +72,10 @@ func (c *Consumer) Start() {
 				if event.RiskScore == 0 {
 					event.RiskScore = event.FinalScore
 				}
+				// Extract typed geo fields from the payload envelope so live
+				// WebSocket consumers (dashboard threat map) get country/lat/lon
+				// without client-side payload parsing.
+				extractGeo(&event)
 				event.Normalize()
 				persistCtx, cancel := context.WithTimeout(c.ctx, 30*time.Second)
 				err = c.engine.AddEvent(persistCtx, &event)
@@ -93,5 +97,29 @@ func (c *Consumer) Stop() {
 	c.wg.Wait()
 	if err := c.reader.Close(); err != nil {
 		log.Printf("Failed to close kafka reader: %v", err)
+	}
+}
+
+// extractGeo parses country/country_code/lat/lon out of the event payload
+// envelope (Kafka risk.decisions / auth.events carry geo in the payload) and
+// promotes them to typed fields for the live WebSocket stream.
+func extractGeo(e *models.Event) {
+	if e.Payload == "" {
+		return
+	}
+	var geo struct {
+		Country     string  `json:"country"`
+		CountryCode string  `json:"country_code"`
+		Lat         float64 `json:"lat"`
+		Lon         float64 `json:"lon"`
+	}
+	if err := json.Unmarshal([]byte(e.Payload), &geo); err != nil {
+		return
+	}
+	e.Country = geo.Country
+	e.CountryCode = geo.CountryCode
+	if geo.Lat != 0 || geo.Lon != 0 {
+		e.Lat = geo.Lat
+		e.Lon = geo.Lon
 	}
 }

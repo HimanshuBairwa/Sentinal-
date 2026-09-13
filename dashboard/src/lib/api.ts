@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { DEMO_RULES } from "./demo";
+import { DEMO_RULES, demoFraudRate, demoGeo, demoTopThreats } from "./demo";
 
 const configuredAPIURL = (process.env.NEXT_PUBLIC_API_URL ?? "").replace(/\/$/, "");
 
@@ -145,21 +145,35 @@ export type GeoPoint = { country: string; count: number };
 export type ThreatSource = { threat_source: string; attempt_count: number };
 
 export async function fetchFraudRate(): Promise<FraudRatePoint[]> {
-  const res = await apiFetch(apiURL("/api/v1/analytics/fraud-rate"), { cache: "no-store" });
-  if (!res.ok) return [];
-  return (await res.json()) as FraudRatePoint[];
+  try {
+    const res = await apiFetch(apiURL("/api/v1/analytics/fraud-rate"), { cache: "no-store" });
+    if (!res.ok) return [];
+    return (await res.json()) as FraudRatePoint[];
+  } catch {
+    // Backend unreachable (public demo deploy): serve the simulated rollup
+    // so analytics visualizations still demonstrate the full experience.
+    return demoFraudRate();
+  }
 }
 
 export async function fetchGeo(): Promise<GeoPoint[]> {
-  const res = await apiFetch(apiURL("/api/v1/analytics/geo"), { cache: "no-store" });
-  if (!res.ok) return [];
-  return (await res.json()) as GeoPoint[];
+  try {
+    const res = await apiFetch(apiURL("/api/v1/analytics/geo"), { cache: "no-store" });
+    if (!res.ok) return [];
+    return (await res.json()) as GeoPoint[];
+  } catch {
+    return demoGeo();
+  }
 }
 
 export async function fetchTopThreats(): Promise<ThreatSource[]> {
-  const res = await apiFetch(apiURL("/api/v1/analytics/top-threats"), { cache: "no-store" });
-  if (!res.ok) return [];
-  return (await res.json()) as ThreatSource[];
+  try {
+    const res = await apiFetch(apiURL("/api/v1/analytics/top-threats"), { cache: "no-store" });
+    if (!res.ok) return [];
+    return (await res.json()) as ThreatSource[];
+  } catch {
+    return demoTopThreats();
+  }
 }
 
 /** Hook wrapper: load-once + refresh callback for rules. */
