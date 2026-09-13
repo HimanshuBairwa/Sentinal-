@@ -19,7 +19,7 @@ class RiskDecisionProducer:
             bootstrap_servers=self.brokers,
             value_serializer=lambda v: json.dumps(v, default=str).encode(),
             compression_type="snappy",
-            acks=1,
+            acks="all",  # durability: decisions must survive broker failover
             max_batch_size=16384,
         )
         await self.producer.start()

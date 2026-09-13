@@ -1,4 +1,5 @@
 import time
+import json
 import asyncio
 from uuid import uuid4
 import redis.asyncio as aioredis
@@ -40,6 +41,22 @@ class FeatureStore:
         pipe.expire(redis_key, window_seconds * 2)
         await pipe.execute()
 
+    async def get_ip_intel_flags(self, ip: str) -> dict:
+        """Fetch cached IP intelligence flags (set during feature extraction)."""
+        raw = await self.redis.get(f"ip_intel_flags:{ip}")
+        if raw:
+            try:
+                return json.loads(raw)
+            except Exception:
+                return {}
+        return {}
+
+    async def set_ip_intel_flags(self, ip: str, flags: dict, ttl: int = 3600):
+        """Cache IP intel flags so the extractor can consume them without a second HTTP call."""
+        if not ip:
+            return
+        await self.redis.setex(f"ip_intel_flags:{ip}", ttl, json.dumps(flags))
+
     async def get_user_history(self, user_id: str) -> dict:
         key = f"user_hist:{user_id}"
         data = await self.redis.hgetall(key)
@@ -48,15 +65,23 @@ class FeatureStore:
     async def update_velocity(self, request: ScoreRequest):
         """Called fire-and-forget after scoring. Updates all velocity counters."""
         tasks = []
+        actor = request.user_id or request.ip_address
         for window in [60, 300, 900, 3600]:
-            tasks.append(self.increment_velocity(request.ip_address, "login_attempts", window))
-            
+            if request.ip_address:
+                tasks.append(self.increment_velocity(request.ip_address, "login_attempts", window))
+            if request.user_id:
+                # Track per-user velocity in the same windows the extractor reads.
+                tasks.append(self.increment_velocity(request.user_id, "login_attempts", window))
+
         if request.user_id:
             if request.device.fingerprint:
                 tasks.append(self.add_unique(request.user_id, "devices", request.device.fingerprint, 86400))
             if request.geo.country_code:
                 tasks.append(self.add_unique(request.user_id, "countries", request.geo.country_code, 604800))
-        
+            if request.ip_address:
+                tasks.append(self.add_unique(request.user_id, "ips", request.ip_address, 3600))
+                tasks.append(self.add_unique(request.user_id, "ips", request.ip_address, 86400))
+
         await asyncio.gather(*tasks)
 
 def get_feature_store() -> FeatureStore:

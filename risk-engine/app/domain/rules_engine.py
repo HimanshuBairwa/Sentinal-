@@ -72,6 +72,9 @@ class RulesEngine:
         """Hot-reload rules from DB."""
         await self.load_rules()
 
+    def rule_count(self) -> int:
+        return len(self._rules_cache)
+
 # Singleton instance
 _rules_engine: RulesEngine | None = None
 

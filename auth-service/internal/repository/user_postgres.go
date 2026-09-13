@@ -83,6 +83,13 @@ func (r *UserPostgres) GetByID(ctx context.Context, id uuid.UUID) (*domain.User,
 	return &u, nil
 }
 
+// Count returns the total number of users (for first-user admin bootstrap).
+func (r *UserPostgres) Count(ctx context.Context) (int64, error) {
+	var count int64
+	err := r.db.QueryRow(ctx, "SELECT count(*) FROM users").Scan(&count)
+	return count, err
+}
+
 func (r *UserPostgres) IncrementFailedLogin(ctx context.Context, email string, maxAttempts int, lockDurationMinutes int) error {
 	query := `
 		UPDATE users 

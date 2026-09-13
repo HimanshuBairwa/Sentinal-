@@ -1,5 +1,26 @@
 @import "tailwindcss";
 
+@theme {
+  --color-sentinel-bg: #030712;
+  --color-sentinel-panel: rgba(17, 24, 39, 0.6);
+  --color-sentinel-border: rgba(148, 163, 184, 0.12);
+  --color-sentinel-cyan: #22d3ee;
+  --color-sentinel-indigo: #818cf8;
+  --animate-shimmer: shimmer 2.4s linear infinite;
+  --animate-aurora: aurora 14s ease-in-out infinite alternate;
+  --animate-aurora-reverse: aurora 18s ease-in-out infinite alternate-reverse;
+  --animate-scanline: scanline 3.2s linear infinite;
+  --animate-radar-sweep: radar-sweep 8s linear infinite;
+  --animate-pulse-soft: pulse-soft 2.6s ease-in-out infinite;
+  --animate-float: float 6s ease-in-out infinite;
+  --animate-orbit: orbit 12s linear infinite;
+  --animate-grid-pan: grid-pan 20s linear infinite;
+  --animate-blink: blink 1.2s steps(2, start) infinite;
+  --animate-signal: signal 2.4s ease-out infinite;
+  --animate-glow-pulse: glow-pulse 3s ease-in-out infinite;
+}
+
+/* ---------- Panels ---------- */
 @utility glass-panel {
   @apply bg-slate-900/40 backdrop-blur-2xl border border-slate-700/50 shadow-[0_8px_32px_0_rgba(0,0,0,0.5)];
 }
@@ -12,15 +33,73 @@
   text-shadow: 0 0 20px rgba(255, 255, 255, 0.3);
 }
 
+/* ---------- Keyframes ---------- */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+@keyframes aurora {
+  0% { transform: translate(-10%, -5%) scale(1); opacity: 0.7; }
+  50% { transform: translate(5%, 8%) scale(1.15); opacity: 1; }
+  100% { transform: translate(-5%, -8%) scale(1); opacity: 0.8; }
+}
+
+@keyframes scanline {
+  0% { transform: translateY(-100%); }
+  100% { transform: translateY(100%); }
+}
+
+@keyframes radar-sweep {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+@keyframes pulse-soft {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+
+@keyframes orbit {
+  from { transform: rotate(0deg) translateX(var(--orbit-r, 40px)) rotate(0deg); }
+  to { transform: rotate(360deg) translateX(var(--orbit-r, 40px)) rotate(-360deg); }
+}
+
+@keyframes grid-pan {
+  from { background-position: 0 0; }
+  to { background-position: 40px 40px; }
+}
+
+@keyframes blink {
+  0%, 49% { opacity: 1; }
+  50%, 100% { opacity: 0.2; }
+}
+
+@keyframes signal {
+  0% { transform: scale(0.4); opacity: 0.9; }
+  100% { transform: scale(2.4); opacity: 0; }
+}
+
+@keyframes glow-pulse {
+  0%, 100% { box-shadow: 0 0 12px rgba(34, 211, 238, 0.25); }
+  50% { box-shadow: 0 0 28px rgba(34, 211, 238, 0.55); }
+}
+
+/* ---------- Root palette ---------- */
 :root {
-  --background: #020617; /* Very dark slate */
+  --background: #030712;
   --foreground: #f8fafc;
 }
 
 body {
   background-color: var(--background);
   color: var(--foreground);
-  /* Generate a subtle noise texture using SVG data URI for that premium physical feel */
+  /* Layered ambient: two aurora radials + fine noise for a premium physical feel */
   background-image:
     radial-gradient(circle at 50% 0%, rgba(99, 102, 241, 0.1) 0%, transparent 50%),
     radial-gradient(circle at 0% 50%, rgba(6, 182, 212, 0.05) 0%, transparent 50%),
@@ -28,7 +107,7 @@ body {
   background-attachment: fixed;
 }
 
-/* Custom Scrollbar for a polished look */
+/* ---------- Custom scrollbar ---------- */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -42,4 +121,72 @@ body {
 }
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(255, 255, 255, 0.2);
+}
+
+/* ---------- Reduced motion ---------- */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ---------- Live status dot ---------- */
+.status-dot-live::after {
+  content: "";
+  position: absolute;
+  inset: -4px;
+  border-radius: 9999px;
+  border: 1px solid currentColor;
+  opacity: 0.4;
+  animation: pulse-soft 2.6s ease-in-out infinite;
+}
+
+/* ---------- Focus ring for a11y ---------- */
+:focus-visible {
+  outline: 2px solid #22d3ee;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* ---------- Ambient grid texture (used by hero panels) ---------- */
+.bg-grid {
+  background-image:
+    linear-gradient(rgba(148, 163, 184, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(148, 163, 184, 0.06) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+
+.bg-grid-animated {
+  animation: grid-pan 20s linear infinite;
+}
+
+/* ---------- Signal ripple (map markers, live dots) ---------- */
+.signal-ripple {
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  border: 1.5px solid currentColor;
+  animation: signal 2.4s ease-out infinite;
+  pointer-events: none;
+}
+
+/* ---------- Skeleton shimmer ---------- */
+.skeleton-shimmer {
+  background: linear-gradient(
+    100deg,
+    rgba(255, 255, 255, 0.03) 40%,
+    rgba(255, 255, 255, 0.08) 50%,
+    rgba(255, 255, 255, 0.03) 60%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 2.4s linear infinite;
+}
+
+/* ---------- Danger glow for critical elements ---------- */
+.danger-glow {
+  animation: glow-pulse 3s ease-in-out infinite;
 }

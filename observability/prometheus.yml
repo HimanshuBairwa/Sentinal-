@@ -1,23 +1,19 @@
 global:
   scrape_interval: 15s
+  evaluation_interval: 15s
 
 scrape_configs:
+  # Gateway: dependency-free Prometheus text-format metrics on /metrics.
   - job_name: 'gateway'
-    static_configs:
-      - targets: ['gateway:9100']
-  - job_name: 'auth-service'
     metrics_path: /metrics
     static_configs:
-      - targets: ['auth-service:8081']
+      - targets: ['gateway:8080']
+
+  # Risk engine: dedicated Prometheus metrics server (:9102).
   - job_name: 'risk-engine'
-    metrics_path: /metrics
     static_configs:
       - targets: ['risk-engine:9102']
-  - job_name: 'analytics-service'
-    metrics_path: /metrics
-    static_configs:
-      - targets: ['analytics-service:8083']
-  - job_name: 'alert-service'
-    metrics_path: /metrics
-    static_configs:
-      - targets: ['alert-service:8084']
+
+  # Analytics service: health-derived liveness (fiber JSON health on :8083).
+  # Real Go metrics endpoints for auth/analytics/alert are on the roadmap;
+  # scraping endpoints that don't exist only creates dead targets.

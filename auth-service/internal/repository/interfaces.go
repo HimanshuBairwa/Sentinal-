@@ -11,6 +11,7 @@ type UserRepository interface {
 	Create(ctx context.Context, user *domain.User) error
 	GetByEmail(ctx context.Context, email string) (*domain.User, error)
 	GetByID(ctx context.Context, id uuid.UUID) (*domain.User, error)
+	Count(ctx context.Context) (int64, error)
 	IncrementFailedLogin(ctx context.Context, email string, maxAttempts int, lockDurationMinutes int) error
 	ResetFailedLogin(ctx context.Context, id uuid.UUID) error
 	UpdateLastLogin(ctx context.Context, id uuid.UUID) error

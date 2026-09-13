@@ -1,6 +1,7 @@
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
     # Service
     HOST: str = "0.0.0.0"
     PORT: int = 8082
@@ -51,7 +52,5 @@ class Settings(BaseSettings):
     ADMIN_SERVICE_TOKEN: str = ""
     CORS_ALLOWED_ORIGINS: str = "http://localhost:3000"
 
-    class Config:
-        env_file = ".env"
 
 settings = Settings()

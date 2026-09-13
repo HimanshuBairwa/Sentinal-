@@ -1,4 +1,4 @@
-.PHONY: up down clean build logs test lint migrate seed generate train load-test k8s-deploy tf-plan
+.PHONY: up down clean build logs test lint migrate seed seed-rules generate train seed-analytics
 
 up:
 	docker compose up -d --build
@@ -24,7 +24,7 @@ logs:
 test:
 	@for svc in gateway auth-service analytics-service alert-service; do \
 		echo "=== Testing $$svc ==="; \
-		cd $$svc && go test -race -count=1 -coverprofile=coverage.out ./... && \
+		cd $$svc && go mod tidy && go test -race -count=1 -coverprofile=coverage.out ./... && \
 		go tool cover -func=coverage.out | grep ^total; cd ..; \
 	done
 	@echo "=== Testing risk-engine ==="
@@ -33,6 +33,7 @@ test:
 lint:
 	golangci-lint run ./gateway/... ./auth-service/... ./analytics-service/... ./alert-service/...
 	cd risk-engine && flake8 app/ && mypy app/ --ignore-missing-imports
+	cd dashboard && npm run lint
 
 migrate:
 	docker compose exec postgres psql -U sentinel -d sentinel \
@@ -43,8 +44,15 @@ migrate:
 		-c "\i /docker-entrypoint-initdb.d/000005_fraud_rules.up.sql" \
 		-c "\i /docker-entrypoint-initdb.d/000006_risk_decisions.up.sql"
 
-seed:
+seed: seed-rules
+
+seed-rules:
 	docker compose exec risk-engine python scripts/seed_rules.py
+
+# Seed ClickHouse with 10k synthetic analytics events so the dashboard
+# has data before real traffic flows.
+seed-analytics:
+	docker compose run --rm analytics-service ./seed
 
 generate:
 	@echo "Synthetic data generation is intentionally explicit; add a dataset job before running this target."

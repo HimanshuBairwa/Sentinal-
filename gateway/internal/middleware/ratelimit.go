@@ -5,7 +5,8 @@ import (
 	"net"
 	"net/http"
 	"strings"
-	
+
+	"sentinel/gateway/internal/metrics"
 	"sentinel/gateway/internal/ratelimit"
 )
 
@@ -35,6 +36,7 @@ func RateLimit(limiter ratelimit.Limiter, trustProxy bool) func(http.Handler) ht
 			}
 
 			if !allowed {
+				metrics.ObserveRateLimited()
 				http.Error(w, "Too Many Requests", http.StatusTooManyRequests)
 				return
 			}

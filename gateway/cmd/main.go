@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"sentinel/gateway/internal/config"
+	"sentinel/gateway/internal/metrics"
 	"sentinel/gateway/internal/middleware"
 	"sentinel/gateway/internal/proxy"
 	"sentinel/gateway/internal/ratelimit"
@@ -38,7 +39,7 @@ func main() {
 
 	rateLimiter := ratelimit.NewSlidingWindowLimiter(redisClient, cfg.RateLimitRequests, 1*time.Minute)
 
-	// 2. Fetch RSA Public Key from Auth Service
+	// 2. Fetch RSA Public Key from Auth Service (blocks until available)
 	log.Printf("Fetching public key from Auth Service at %s...", cfg.AuthServiceURL)
 	pubKey, err := middleware.FetchPublicKey(cfg.AuthServiceURL)
 	if err != nil {
@@ -47,6 +48,11 @@ func main() {
 	log.Println("Successfully loaded RSA public key for JWT validation.")
 
 	authMiddleware := middleware.NewAuthMiddleware(pubKey, cfg.JWTIssuer, cfg.JWTAudience)
+
+	// 2b. Background key rotation: survive auth-service restarts & key changes.
+	keyPoller := middleware.NewKeyPoller(cfg.AuthServiceURL, authMiddleware)
+	keyPoller.Start(30 * time.Second)
+	defer keyPoller.Stop()
 
 	// 3. Initialize Reverse Proxies
 	authProxy, err := proxy.NewReverseProxy(cfg.AuthServiceURL)
@@ -82,22 +88,40 @@ func main() {
 	r.Use(chimiddleware.Recoverer)
 	r.Use(middleware.RateLimit(rateLimiter, cfg.TrustProxy))
 
+	// Prometheus-compatible metrics endpoint (dependency-free exposition).
+	r.Get("/metrics", func(w http.ResponseWriter, r *http.Request) {
+		metrics.Handler().ServeHTTP(w, r)
+	})
+
+	// Dependency-aware health: reports Redis + auth-key state so orchestrators
+	// and the dashboard see truth, not a hardcoded 200.
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("Gateway Healthy"))
+		w.Header().Set("Content-Type", "application/json")
+		redisOK := redisClient.Ping(r.Context()).Err() == nil
+		keyErr := keyPoller.Status()
+		healthy := redisOK && keyErr == ""
+		status := http.StatusOK
+		if !healthy {
+			status = http.StatusServiceUnavailable
+		}
+		w.WriteHeader(status)
+		w.Write([]byte(`{"status":"` + map[bool]string{true: "ok", false: "degraded"}[healthy] + `","redis":` + map[bool]string{true: "true", false: "false"}[redisOK] + `,"auth_key":"` + map[bool]string{true: "ok", false: "error"}[keyErr == ""] + `"}`))
 	})
 
 	// 5. Mount Routes
-	
+
 	// Public routes (Auth)
-	r.Handle("/api/v1/auth/*", authProxy)
+	r.Handle("/api/v1/auth/*", middleware.RequestMetrics("auth", authProxy))
 
 	// Protected routes (Risk Engine & Analytics)
 	r.Group(func(r chi.Router) {
-		r.Use(authMiddleware.VerifyJWT) // Verify JWT locally before forwarding!
-		
-		r.Handle("/api/v1/risk/*", riskProxy)
-		r.Handle("/api/v1/analytics/*", analyticsProxy)
+		r.Use(authMiddleware.VerifyJWT) // Verify JWT locally before forwarding
+
+		r.Handle("/api/v1/risk/*", middleware.RequestMetrics("risk", riskProxy))
+		// Rules management API — JWT-protected; the risk engine additionally
+		// gates mutations on the gateway-verified X-User-Role (or service token).
+		r.Handle("/api/v1/rules/*", middleware.RequestMetrics("rules", riskProxy))
+		r.Handle("/api/v1/analytics/*", middleware.RequestMetrics("analytics", analyticsProxy))
 	})
 
 	// 6. Start Server

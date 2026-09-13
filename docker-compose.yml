@@ -150,6 +150,8 @@ services:
   mlflow:
     image: ghcr.io/mlflow/mlflow:v2.13.0
     container_name: sentinel-mlflow
+    ports:
+      - "127.0.0.1:5000:5000"
     environment:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       AWS_ACCESS_KEY_ID: ${MINIO_ACCESS_KEY}

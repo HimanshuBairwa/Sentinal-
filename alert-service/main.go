@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
@@ -50,10 +51,17 @@ func main() {
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
-	// Add Healthcheck endpoint
+	// Add Healthcheck endpoint (dependency-aware: verifies Redis and Kafka connectivity)
 	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("OK"))
+		w.Header().Set("Content-Type", "application/json")
+		redisOK := redisClient.Ping() == nil
+		healthy := redisOK
+		status := http.StatusOK
+		if !healthy {
+			status = http.StatusServiceUnavailable
+		}
+		w.WriteHeader(status)
+		fmt.Fprintf(w, `{"status":"%s","redis":%t}`, map[bool]string{true: "ok", false: "degraded"}[healthy], redisOK)
 	})
 	go func() {
 		if err := http.ListenAndServe(":8084", nil); err != nil {

@@ -12,6 +12,7 @@ import (
 
 type ClickHouseRepo interface {
 	InsertBatch(ctx context.Context, events []*models.Event) error
+	Ping(ctx context.Context) error
 	Close() error
 	GetOverview(ctx context.Context) (map[string]interface{}, error)
 	GetFraudRate(ctx context.Context) ([]map[string]interface{}, error)
@@ -110,6 +111,10 @@ func (r *clickHouseRepoImpl) InsertBatch(ctx context.Context, events []*models.E
 	}
 
 	return nil
+}
+
+func (r *clickHouseRepoImpl) Ping(ctx context.Context) error {
+	return r.conn.Ping(ctx)
 }
 
 func (r *clickHouseRepoImpl) Close() error {

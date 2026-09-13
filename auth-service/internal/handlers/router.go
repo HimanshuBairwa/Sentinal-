@@ -10,7 +10,7 @@ import (
 	"sentinel/auth-service/internal/service"
 )
 
-func NewRouter(authHandler *AuthHandler, tokenService service.TokenService) http.Handler {
+func NewRouter(authHandler *AuthHandler, tokenService service.TokenService, health HealthDeps) http.Handler {
 	r := chi.NewRouter()
 
 	r.Use(chimiddleware.RequestID)
@@ -18,10 +18,7 @@ func NewRouter(authHandler *AuthHandler, tokenService service.TokenService) http
 	r.Use(chimiddleware.Logger)
 	r.Use(chimiddleware.Recoverer)
 
-	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("OK"))
-	})
+	r.Get("/health", authHandler.Health(health))
 
 	r.Route("/api/v1/auth", func(r chi.Router) {
 		// Public routes

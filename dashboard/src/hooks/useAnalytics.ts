@@ -68,6 +68,7 @@ export function useAnalytics() {
   const [overview, setOverview] = useState<AnalyticsOverview | null>(null);
   const [events, setEvents] = useState<AnalyticsEvent[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
   const { data: liveEvent, isConnected } = useWebSocket<AnalyticsEvent>(websocketURL());
 
   const refresh = useCallback(async () => {
@@ -82,6 +83,8 @@ export function useAnalytics() {
       setError(null);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Analytics API unavailable");
+    } finally {
+      setLoading(false);
     }
   }, []);
 
@@ -109,5 +112,28 @@ export function useAnalytics() {
     fraud: event.action === "BLOCK" || event.action === "CHALLENGE" ? 1 : 0,
   })), [events]);
 
-  return { metrics, history, events, isConnected, error, refresh };
+  // Real trend: fraction of BLOCK/CHALLENGE decisions in the recent event
+  // stream vs total — computed from live data, not hardcoded.
+  const threatRatio = useMemo(() => {
+    const flagged = events.filter((event) => event.action === "BLOCK" || event.action === "CHALLENGE").length;
+    return events.length > 0 ? (flagged / events.length) * 100 : 0;
+  }, [events]);
+
+  // System load proxy: events per second over the last 10s, scaled against
+  // a 10-events/10s budget. `now` comes from a state clock so this memo
+  // stays pure (Date.now() during render is forbidden by react-hooks/purity).
+  const [now, setNow] = useState(0);
+  useEffect(() => {
+    const kickoff = window.setTimeout(() => setNow(Date.now()), 0);
+    const t = window.setInterval(() => setNow(Date.now()), 5_000);
+    return () => { window.clearTimeout(kickoff); window.clearInterval(t); };
+  }, []);
+  const systemLoad = useMemo(() => {
+    if (events.length === 0 || now === 0) return 0;
+    const cutoff = now - 10_000;
+    const recent = events.filter((event) => new Date(event.timestamp).getTime() > cutoff).length;
+    return Math.min(100, Math.round((recent / 10) * 10));
+  }, [events, now]);
+
+  return { metrics: { ...metrics, systemLoad }, history, events, isConnected, error, loading, threatRatio, refresh };
 }

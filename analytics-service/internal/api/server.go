@@ -43,8 +43,17 @@ func NewServer(engine *batch.Engine, repo repository.ClickHouseRepo) *Server {
 }
 
 func (s *Server) setupRoutes() {
+	// Dependency-aware health: reports ClickHouse state with the correct status
+	// code so orchestrators and the dashboard see truth, not a hardcoded 200.
 	s.app.Get("/health", func(c *fiber.Ctx) error {
-		return c.SendString("OK")
+		if err := s.repo.Ping(c.Context()); err != nil {
+			return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{
+				"status": "degraded",
+				"clickhouse": "error",
+				"error": err.Error(),
+			})
+		}
+		return c.JSON(fiber.Map{"status": "ok", "clickhouse": "ok"})
 	})
 
 	s.app.Post("/ingest", s.handleIngest)

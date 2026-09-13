@@ -49,12 +49,25 @@ func (s *AuthService) RegisterUser(ctx context.Context, email, password, fullNam
 		return nil, err
 	}
 
+	// Bootstrap: the FIRST registered user becomes admin so the platform's
+	// RBAC (rules management, admin stats) is usable without manual SQL.
+	// Every later user is a standard 'user'.
+	count, err := s.userRepo.Count(ctx)
+	if err != nil {
+		// Fail-closed on uncertainty: never grant admin if we can't verify.
+		return nil, err
+	}
+	role := domain.RoleUser
+	if count == 0 {
+		role = domain.RoleAdmin
+	}
+
 	user := &domain.User{
 		ID:           uuid.New(),
 		Email:        email,
 		PasswordHash: string(hash),
 		FullName:     fullName,
-		Role:         domain.RoleUser,
+		Role:         role,
 		IsActive:     true,
 	}
 

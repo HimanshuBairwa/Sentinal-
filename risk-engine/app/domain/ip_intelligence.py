@@ -14,20 +14,13 @@ class IPIntelligence:
 
     async def score(self, ip: str) -> float:
         """Returns IP risk score 0-100. Cached in Redis."""
-        cached = await self.redis.get(f"ip_intel:{ip}")
-        if cached:
-            data = json.loads(cached)
-        else:
-            data = await self._fetch_ip_data(ip)
-            await self.redis.setex(
-                f"ip_intel:{ip}", self.cache_ttl, json.dumps(data)
-            )
+        data = await self._get_or_fetch(ip)
         return self._compute_score(data)
 
     async def get_flags(self, ip: str) -> dict:
-        """Returns VPN/TOR/datacenter flags for feature extraction."""
-        cached = await self.redis.get(f"ip_intel:{ip}")
-        data = json.loads(cached) if cached else await self._fetch_ip_data(ip)
+        """Returns VPN/TOR/datacenter/proxy flags. Populates the cache when
+        the lookup was a miss so a second call never re-fetches."""
+        data = await self._get_or_fetch(ip)
         return {
             "ip_is_vpn": self._is_vpn(data),
             "ip_is_tor": self._is_tor(data),
@@ -35,8 +28,22 @@ class IPIntelligence:
             "ip_is_proxy": self._is_proxy(data),
         }
 
+    async def _get_or_fetch(self, ip: str) -> dict:
+        cached = await self.redis.get(f"ip_intel:{ip}")
+        if cached:
+            try:
+                return json.loads(cached)
+            except (TypeError, ValueError):
+                pass  # corrupted cache entry; fall through to refetch
+        data = await self._fetch_ip_data(ip)
+        if data:
+            await self.redis.setex(
+                f"ip_intel:{ip}", self.cache_ttl, json.dumps(data)
+            )
+        return data
+
     async def _fetch_ip_data(self, ip: str) -> dict:
-        """Call ip-api.com with 300ms timeout. Return empty dict on failure."""
+        """Call ip-api.com with a 300ms timeout. Return empty dict on failure."""
         try:
             async with httpx.AsyncClient(timeout=0.3) as client:
                 r = await client.get(

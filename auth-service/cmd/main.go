@@ -58,7 +58,15 @@ func main() {
 
 	// 7. Initialize HTTP Handlers & Router
 	authHandler := handlers.NewAuthHandler(authService, tokenService)
-	router := handlers.NewRouter(authHandler, tokenService)
+	health := handlers.HealthDeps{
+		PingDB: func(ctx context.Context) bool {
+			return dbPool.Ping(ctx) == nil
+		},
+		PingRedis: func(ctx context.Context) bool {
+			return redisClient.Ping(ctx).Err() == nil
+		},
+	}
+	router := handlers.NewRouter(authHandler, tokenService, health)
 
 	// 8. Start HTTP Server with Graceful Shutdown
 	srv := &http.Server{

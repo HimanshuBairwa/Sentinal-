@@ -43,13 +43,20 @@ var (
 
 type RedisClient struct {
 	client *redis.Client
+	ctx    context.Context
 }
 
 func NewRedisClient(addr string) *RedisClient {
 	rdb := redis.NewClient(&redis.Options{
 		Addr: addr,
 	})
-	return &RedisClient{client: rdb}
+	// go-redis v8 requires a context; keep a background context at the client level.
+	return &RedisClient{client: rdb, ctx: context.Background()}
+}
+
+// Ping verifies Redis connectivity for the health endpoint.
+func (r *RedisClient) Ping() error {
+	return r.client.Ping(r.ctx).Err()
 }
 
 // AllowAlert checks if the alert should be allowed based on dedup and rate limiting.

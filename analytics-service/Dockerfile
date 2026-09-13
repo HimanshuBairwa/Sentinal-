@@ -3,13 +3,15 @@ RUN apk add --no-cache wget git
 WORKDIR /app
 COPY . .
 RUN go mod download
-RUN CGO_ENABLED=0 go build -o main .
+RUN CGO_ENABLED=0 go build -o main . && \
+    CGO_ENABLED=0 go build -o seed ./cmd/seed
 
 FROM alpine:3.20
 RUN apk add --no-cache wget ca-certificates
 RUN addgroup -S sentinel && adduser -S -G sentinel sentinel
 WORKDIR /app
 COPY --from=builder /app/main .
+COPY --from=builder /app/seed ./seed
 USER sentinel
 EXPOSE 8083
 CMD ["./main"]

@@ -1,77 +1,161 @@
-"use client"
-import { Activity, AlertTriangle, ShieldCheck, Zap } from "lucide-react";
+"use client";
+
+import { Activity, AlertTriangle, ShieldCheck, Zap, Gauge as GaugeIcon } from "lucide-react";
 import { MetricCard } from "../components/ui/MetricCard";
+import { MetricSkeleton, ChartSkeleton } from "../components/ui/Skeleton";
 import { GlassCard } from "../components/ui/GlassCard";
-import { useAnalytics } from "../hooks/useAnalytics";
+import { TiltCard } from "../components/ui/TiltCard";
+import { Gauge } from "../components/ui/Gauge";
+import { useLive } from "../components/live/LiveContext";
 import { TransactionAreaChart } from "../components/charts/TransactionAreaChart";
 import { LiveThreatFeed } from "../components/feed/LiveThreatFeed";
+import { WorldThreatMap } from "../components/map/WorldThreatMap";
 import { motion } from "framer-motion";
 
+const COUNTRY_COORDS: Record<string, [number, number]> = {
+  US: [39.8, -98.6], GB: [54.0, -2.0], CA: [56.1, -106.3], IN: [20.6, 78.9],
+  CN: [35.9, 104.2], BR: [-14.2, -51.9], RU: [61.5, 105.3], DE: [51.2, 10.4],
+  FR: [46.2, 2.2], JP: [36.2, 138.3], NL: [52.1, 5.3], SG: [1.35, 103.8],
+  AU: [-25.3, 133.8], ZA: [-30.6, 22.9], NG: [9.1, 8.7], VN: [14.1, 108.3],
+  ID: [-0.8, 113.9], TR: [38.9, 35.2], KR: [35.9, 127.8], MX: [23.6, -102.5],
+};
+
 export default function CommandCenter() {
-  const { metrics, history, events, isConnected } = useAnalytics();
+  const { metrics, history, events, isConnected, error, loading, threatRatio } = useLive();
+
+  // Map threats derived from the live event stream (same logic as threats page).
+  const mapThreats = events
+    .filter((e) => {
+      const country = (e as { country?: string; country_code?: string }).country ??
+        (e as { country_code?: string }).country_code;
+      return country ? COUNTRY_COORDS[country.toUpperCase()] : false;
+    })
+    .slice(0, 12)
+    .map((e) => {
+      const country = ((e as { country?: string }).country ??
+        (e as { country_code?: string }).country_code ?? "").toUpperCase();
+      const [lat, lon] = COUNTRY_COORDS[country];
+      const key = e.ip_address ?? e.event_id ?? "anon";
+      let h = 0;
+      for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) | 0;
+      return {
+        id: e.id ?? e.event_id ?? key,
+        lat: lat + (((Math.abs(h) % 100) / 100) - 0.5) * 8,
+        lon: lon + ((((Math.abs(h) >> 5) % 100) / 100) - 0.5) * 8,
+        score: e.risk_score ?? 0,
+        action: e.action ?? "ALLOW",
+        label: e.ip_address ?? undefined,
+      };
+    });
 
   return (
-    <div className="space-y-6 max-w-[1600px] mx-auto pb-10">
+    <div className="mx-auto max-w-[1600px] space-y-6 p-6 pb-10 lg:p-8">
       <motion.div
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
-        className="flex items-end justify-between border-b border-white/5 pb-4"
+        className="flex flex-wrap items-end justify-between gap-4 border-b border-white/5 pb-4"
       >
         <div>
-          <h1 className="text-3xl font-bold tracking-tight text-white flex items-center gap-3">
-            <ShieldCheck className="w-8 h-8 text-indigo-400" />
+          <h1 className="flex items-center gap-3 text-3xl font-bold tracking-tight text-white">
+            <ShieldCheck className="h-8 w-8 text-cyan-400" />
             Command Center
           </h1>
-          <p className="text-slate-400 text-sm mt-1">Real-time global fraud monitoring</p>
+          <p className="mt-1 text-sm text-slate-400">Real-time global fraud monitoring</p>
         </div>
-        <div className="flex items-center gap-3 bg-white/5 backdrop-blur-md px-4 py-2 rounded-full border border-white/10">
-          <div className="relative flex h-3 w-3">
-            {isConnected && <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>}
-            <span className={`relative inline-flex rounded-full h-3 w-3 ${isConnected ? 'bg-emerald-500' : 'bg-red-500'}`}></span>
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 text-xs text-slate-500">
+            <GaugeIcon className="h-3.5 w-3.5" />
+            {events.length} events buffered
           </div>
-          <span className={`text-xs font-semibold tracking-wider ${isConnected ? 'text-emerald-400' : 'text-red-400'}`}>
-            {isConnected ? 'SYSTEM ONLINE' : 'CONNECTION LOST'}
-          </span>
+          <div className="flex items-center gap-3 rounded-full border border-white/10 bg-white/5 px-4 py-2 backdrop-blur-md">
+            <span className="relative flex h-3 w-3">
+              {isConnected && (
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+              )}
+              <span
+                className={`relative inline-flex h-3 w-3 rounded-full ${
+                  isConnected ? "bg-emerald-500" : "bg-rose-500"
+                }`}
+              />
+            </span>
+            <span
+              className={`text-xs font-semibold tracking-wider ${
+                isConnected ? "text-emerald-400" : "text-rose-400"
+              }`}
+            >
+              {isConnected ? "SYSTEM ONLINE" : "CONNECTION LOST"}
+            </span>
+          </div>
         </div>
       </motion.div>
 
-      {/* Bento Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-6">
+      {error && (
+        <div className="rounded-lg border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-sm text-amber-300">
+          Telemetry degraded: {error} — showing last known state.
+        </div>
+      )}
 
-        {/* Main Chart - Spans 8 columns */}
-        <div className="lg:col-span-8 flex flex-col gap-6">
-          <GlassCard title="Global Transaction Volume vs Fraud" className="h-[420px]" premium>
-            {history.length > 0 ? (
+      {/* Bento grid */}
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-12">
+        {/* Main chart column */}
+        <div className="flex flex-col gap-6 lg:col-span-8">
+          <GlassCard
+            title="Global Transaction Volume vs Fraud"
+            subtitle="Live ClickHouse telemetry"
+            className="h-[420px]"
+            spotlight
+            premium
+          >
+            {loading ? (
+              <ChartSkeleton className="h-full w-full border-0 bg-transparent p-0 shadow-none" />
+            ) : history.length > 0 ? (
               <TransactionAreaChart data={history} />
             ) : (
-              <div className="h-full flex items-center justify-center text-slate-500">
-                Awaiting telemetry...
+              <div className="flex h-full flex-col items-center justify-center gap-3 text-slate-500">
+                <span className="h-10 w-10 animate-spin rounded-full border-2 border-white/10 border-t-cyan-400" />
+                <span className="text-sm">Awaiting telemetry…</span>
+                <span className="text-xs text-slate-600">
+                  Seed data with <code className="rounded bg-white/5 px-1 py-0.5">make seed-analytics</code>
+                </span>
               </div>
             )}
           </GlassCard>
 
-          {/* Top Row of Metrics */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-            <MetricCard
-              title="Total Processed"
-              value={metrics.totalTransactions}
-              icon={<Activity size={24} />}
-              trend={{ value: 12.5, isPositive: true }}
-              delay={0.1}
-            />
-            <MetricCard
-              title="Fraud Rate"
-              value={metrics.fraudRate}
-              format="percent"
-              icon={<AlertTriangle size={24} />}
-              trend={{ value: 0.2, isPositive: false }}
-              delay={0.2}
-            />
+          {/* Metric row */}
+          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+            {loading ? (
+              <>
+                <MetricSkeleton delay={0.1} />
+                <MetricSkeleton delay={0.2} />
+              </>
+            ) : (
+              <>
+                <TiltCard className="rounded-2xl">
+                  <MetricCard
+                    title="Total Processed"
+                    value={metrics.totalTransactions}
+                    icon={<Activity size={24} />}
+                    trend={{ value: threatRatio, isPositive: false }}
+                    delay={0.1}
+                  />
+                </TiltCard>
+                <TiltCard className="rounded-2xl">
+                  <MetricCard
+                    title="Fraud Rate"
+                    value={metrics.fraudRate}
+                    format="percent"
+                    icon={<AlertTriangle size={24} />}
+                    trend={{ value: threatRatio, isPositive: false }}
+                    delay={0.2}
+                  />
+                </TiltCard>
+              </>
+            )}
           </div>
         </div>
 
-        {/* Right Sidebar - Spans 4 columns */}
-        <div className="lg:col-span-4 flex flex-col gap-6">
+        {/* Right column */}
+        <div className="flex flex-col gap-6 lg:col-span-4">
           <div className="grid grid-cols-1 gap-6">
             <MetricCard
               title="Active Alerts"
@@ -80,20 +164,44 @@ export default function CommandCenter() {
               delay={0.3}
             />
             <MetricCard
-              title="System Load"
-              value={metrics.systemLoad}
+              title="Stream Health"
+              value={isConnected ? 100 : 0}
               format="percent"
+              ring={isConnected ? 100 : 0}
               icon={<ShieldCheck size={24} />}
               delay={0.4}
             />
           </div>
 
-          <GlassCard title="Live Threat Feed" className="flex-1 min-h-[300px]" premium>
+          {/* Fraud-rate gauge — the poster-child metric, now with a needle */}
+          <GlassCard title="Threat Posture" subtitle="Live window analysis" premium>
+            <div className="flex items-center justify-around py-2">
+              <Gauge value={metrics.fraudRate} label="Fraud Rate" unit="%" size={140} dangerThreshold={50} warnThreshold={25} />
+              <Gauge value={metrics.systemLoad} label="Load" unit="%" size={110} dangerThreshold={80} warnThreshold={60} />
+            </div>
+          </GlassCard>
+
+          <GlassCard
+            title="Live Threat Feed"
+            subtitle="BLOCK & CHALLENGE decisions"
+            className="min-h-[300px] flex-1"
+            spotlight
+            premium
+          >
             <LiveThreatFeed events={events} />
           </GlassCard>
         </div>
-
       </div>
+
+      {/* Mini world map strip — global context at a glance */}
+      <GlassCard
+        title="Global Activity"
+        subtitle="Live sources on the world stage"
+        className="h-[340px]"
+        premium
+      >
+        <WorldThreatMap threats={mapThreats} />
+      </GlassCard>
     </div>
   );
 }

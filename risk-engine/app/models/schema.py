@@ -60,6 +60,15 @@ class RuleCreate(BaseModel):
     is_enabled: bool = True
     priority: int = 50
 
+class RuleUpdate(BaseModel):
+    name: str
+    description: str = ""
+    expression: str
+    score_contribution: int
+    action: str
+    is_enabled: bool = True
+    priority: int = 50
+
 class RuleResponse(BaseModel):
     id: str
     rule_id: str
