@@ -13,6 +13,7 @@ import {
   AlertTriangle,
   Check,
   ExternalLink,
+  FlaskConical,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -295,7 +296,7 @@ const NAV_TARGETS: NavTarget[] = [
   { label: "System Health", href: "/system" },
 ];
 
-export function TopBar({ events = [], isConnected = false }: { events?: AnalyticsEvent[]; isConnected?: boolean }) {
+export function TopBar({ events = [], isConnected = false, demo = false }: { events?: AnalyticsEvent[]; isConnected?: boolean; demo?: boolean }) {
   const [paletteOpen, setPaletteOpen] = useState(false);
 
   useEffect(() => {
@@ -325,7 +326,14 @@ export function TopBar({ events = [], isConnected = false }: { events?: Analytic
       </div>
 
       <div className="flex items-center gap-4">
-        <LiveStatusPill isConnected={isConnected} />
+        {demo ? (
+          <div className="flex items-center gap-2 rounded-full border border-cyan-500/30 bg-cyan-500/10 px-3 py-1.5 text-cyan-400 shadow-[0_0_15px_rgba(34,211,238,0.2)]">
+            <FlaskConical size={13} />
+            <span className="text-[11px] font-semibold tracking-wider">DEMO</span>
+          </div>
+        ) : (
+          <LiveStatusPill isConnected={isConnected} />
+        )}
         <div className="h-6 w-px bg-white/10" />
         <NotificationsDropdown events={events} />
         <div className="h-6 w-px bg-white/10" />

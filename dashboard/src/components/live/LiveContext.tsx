@@ -23,6 +23,7 @@ type LiveData = {
   isConnected: boolean;
   error: string | null;
   loading: boolean;
+  demo: boolean;
   threatRatio: number;
   refresh: () => Promise<void>;
   lastEventAt: number | null;
@@ -31,7 +32,7 @@ type LiveData = {
 const LiveContext = createContext<LiveData | null>(null);
 
 export function LiveProvider({ children }: { children: ReactNode }) {
-  const { events, metrics, history, isConnected, error, loading, threatRatio, refresh } = useAnalytics();
+  const { events, metrics, history, isConnected, error, loading, demo, threatRatio, refresh } = useAnalytics();
   const [lastEventAt, setLastEventAt] = useState<number | null>(null);
   const [hasEverHadEvents, setHasEverHadEvents] = useState(false);
 
@@ -47,8 +48,8 @@ export function LiveProvider({ children }: { children: ReactNode }) {
   }, [events.length, hasEverHadEvents]);
 
   const value = useMemo<LiveData>(
-    () => ({ events, metrics, history, isConnected, error, loading, threatRatio, refresh, lastEventAt }),
-    [events, metrics, history, isConnected, error, loading, threatRatio, refresh, lastEventAt]
+    () => ({ events, metrics, history, isConnected, error, loading, demo, threatRatio, refresh, lastEventAt }),
+    [events, metrics, history, isConnected, error, loading, demo, threatRatio, refresh, lastEventAt]
   );
 
   return <LiveContext.Provider value={value}>{children}</LiveContext.Provider>;

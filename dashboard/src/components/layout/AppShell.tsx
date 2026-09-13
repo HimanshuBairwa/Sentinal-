@@ -9,7 +9,7 @@ import { LiveProvider, useLive } from "../live/LiveContext";
 
 function Shell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const { events, isConnected } = useLive();
+  const { events, isConnected, demo } = useLive();
 
   return (
     <div className="flex h-screen overflow-hidden bg-[#020617] text-slate-50">
@@ -21,8 +21,21 @@ function Shell({ children }: { children: React.ReactNode }) {
         {/* Ambient panning grid — barely visible, adds depth */}
         <div className="bg-grid bg-grid-animated pointer-events-none absolute inset-0 opacity-[0.35]" />
 
-        <TopBar events={events} isConnected={isConnected} />
+        <TopBar events={events} isConnected={isConnected} demo={demo} />
         <main className="relative z-0 flex-1 overflow-auto">
+          {/* Demo-mode banner — honest about what's powering the visuals */}
+          {demo && (
+            <div className="flex items-center justify-center gap-2 border-b border-cyan-500/20 bg-cyan-500/10 px-4 py-2 text-xs text-cyan-300">
+              <span className="relative flex h-2 w-2">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-cyan-400 opacity-75" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-cyan-400" />
+              </span>
+              <span className="font-semibold tracking-wide">DEMO MODE</span>
+              <span className="text-cyan-400/70">
+                — simulated live telemetry (no backend connected). Run the platform locally for real data.
+              </span>
+            </div>
+          )}
           <AnimatePresence mode="wait" initial={false}>
             <motion.div
               key={pathname}

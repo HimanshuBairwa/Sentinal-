@@ -139,6 +139,19 @@ The Next.js command center is a product-grade console, not a demo:
 - **Live telemetry once, consumed everywhere** — a single shared WebSocket + REST polling loop drives the feed, charts, map, notifications, and command palette (⌘K fuzzy search over pages, IPs, users).
 - Every metric is **computed from real data** — no hardcoded trends, skeletons while loading, degraded-state banners when ClickHouse is down.
 
+## Deploying the dashboard (Vercel)
+
+The dashboard ships with a **self-engaging demo mode**: when no backend is reachable (like a public Vercel deployment), it automatically switches to a deterministic, seeded live-telemetry simulation — the world map, gauges, feed, charts, and toasts all run on realistic data, with an honest `DEMO MODE` badge. Point `NEXT_PUBLIC_API_URL` at a reachable gateway and it uses real data instead. No code changes required either way.
+
+**Deploy in 2 minutes:**
+
+1. Push the repo to GitHub (done — this repo).
+2. Go to [vercel.com/new](https://vercel.com/new), import the repo.
+3. Set **Root Directory** to `dashboard` (everything else auto-detects: Next.js 16, `npm install`, `next build`).
+4. Deploy — the atlas is served statically with immutable caching; zero other env vars needed for demo mode.
+
+**Live backend later:** set `NEXT_PUBLIC_API_URL=https://your-gateway.example.com` in Vercel project settings.
+
 ## Repository layout
 
 ```

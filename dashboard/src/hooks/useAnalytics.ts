@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useWebSocket } from "./useWebSocket";
+import { demoBackfill, demoTick } from "../lib/demo";
 
 export type AnalyticsOverview = {
   total_events: number;
@@ -18,6 +19,8 @@ export type AnalyticsEvent = {
   timestamp: string;
   action?: string;
   risk_score?: number;
+  country_code?: string;
+  country?: string;
 };
 
 export type AnalyticsMetrics = {
@@ -64,11 +67,35 @@ function websocketURL(): string | null {
   return token ? `${base}/api/v1/analytics/ws?access_token=${encodeURIComponent(token)}` : null;
 }
 
+/**
+ * Try the real analytics API once, quickly. Resolves true if it's reachable
+ * (any HTTP status — even 401/403 proves a gateway exists). On network error
+ * (deployment without backend), resolves false → demo mode engages.
+ */
+async function probeBackend(): Promise<boolean> {
+  if (typeof window === "undefined") return false;
+  try {
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 2_500);
+    const res = await fetch(`${getAPIURL()}/api/v1/analytics/overview`, {
+      cache: "no-store",
+      signal: controller.signal,
+      headers: authHeaders(),
+    });
+    window.clearTimeout(timeout);
+    return res.status > 0; // any response = backend present
+  } catch {
+    return false;
+  }
+}
+
 export function useAnalytics() {
   const [overview, setOverview] = useState<AnalyticsOverview | null>(null);
   const [events, setEvents] = useState<AnalyticsEvent[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  /** true = backend unreachable; running on simulated telemetry. */
+  const [demo, setDemo] = useState(false);
   const { data: liveEvent, isConnected } = useWebSocket<AnalyticsEvent>(websocketURL());
 
   const refresh = useCallback(async () => {
@@ -81,6 +108,7 @@ export function useAnalytics() {
       setOverview((await overviewResponse.json()) as AnalyticsOverview);
       setEvents((await eventsResponse.json()) as AnalyticsEvent[]);
       setError(null);
+      setDemo(false);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Analytics API unavailable");
     } finally {
@@ -88,23 +116,64 @@ export function useAnalytics() {
     }
   }, []);
 
+  // Backend detection: probe once on mount. If unreachable → demo mode with
+  // an instant backfill + live simulated stream.
   useEffect(() => {
-    queueMicrotask(() => void refresh());
-    const timer = window.setInterval(() => void refresh(), 30_000);
-    return () => window.clearInterval(timer);
+    let cancelled = false;
+    void probeBackend().then((reachable) => {
+      if (cancelled) return;
+      if (reachable) {
+        queueMicrotask(() => void refresh());
+        const timer = window.setInterval(() => void refresh(), 30_000);
+        return () => window.clearInterval(timer);
+      }
+      // ---- DEMO MODE ----
+      setDemo(true);
+      const backfill = demoBackfill(48, 30) as AnalyticsEvent[];
+      setEvents(backfill);
+      const flagged = backfill.filter((e) => e.action === "BLOCK" || e.action === "CHALLENGE").length;
+      setOverview({
+        total_events: 128_400 + backfill.length,
+        fraud_events: 1_872 + flagged,
+        fraud_rate: ((1_872 + flagged) / (128_400 + backfill.length)) * 100,
+      });
+      setError(null);
+      setLoading(false);
+      const tick = window.setInterval(() => {
+        setEvents((current) => {
+          const next = demoTick() as AnalyticsEvent;
+          const merged = [next, ...current].slice(0, 50);
+          setOverview((ov) => ov ? {
+            total_events: ov.total_events + 1,
+            fraud_events: ov.fraud_events + (next.action === "BLOCK" || next.action === "CHALLENGE" ? 1 : 0),
+            fraud_rate: 0, // recomputed below
+          } : ov);
+          return merged;
+        });
+      }, 1_400);
+      return () => window.clearInterval(tick);
+    });
+    return () => { cancelled = true; };
   }, [refresh]);
 
+  // Live WebSocket event (production only).
   useEffect(() => {
-    if (!liveEvent) return;
+    if (!liveEvent || demo) return;
     queueMicrotask(() => setEvents((current) => [liveEvent, ...current.filter((event) => (event.id ?? event.event_id) !== (liveEvent.id ?? liveEvent.event_id))].slice(0, 50)));
-  }, [liveEvent]);
+  }, [liveEvent, demo]);
 
-  const metrics = useMemo<AnalyticsMetrics>(() => ({
-    totalTransactions: overview?.total_events ?? 0,
-    fraudRate: overview?.fraud_rate ?? 0,
-    activeAlerts: events.filter((event) => event.action === "BLOCK" || event.action === "CHALLENGE").length,
-    systemLoad: 0,
-  }), [events, overview]);
+  const metrics = useMemo<AnalyticsMetrics>(() => {
+    const flagged = events.filter((event) => event.action === "BLOCK" || event.action === "CHALLENGE").length;
+    return {
+      totalTransactions: overview?.total_events ?? 0,
+      // In demo mode the overview counter drifts; derive rate from the live window.
+      fraudRate: demo
+        ? events.length > 0 ? (flagged / events.length) * 100 : 0
+        : overview?.fraud_rate ?? 0,
+      activeAlerts: flagged,
+      systemLoad: 0,
+    };
+  }, [events, overview, demo]);
 
   const history = useMemo(() => events.slice().reverse().map((event) => ({
     time: new Date(event.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
@@ -135,5 +204,15 @@ export function useAnalytics() {
     return Math.min(100, Math.round((recent / 10) * 10));
   }, [events, now]);
 
-  return { metrics: { ...metrics, systemLoad }, history, events, isConnected, error, loading, threatRatio, refresh };
+  return {
+    metrics: { ...metrics, systemLoad },
+    history,
+    events,
+    isConnected: demo ? true : isConnected,
+    error,
+    loading,
+    demo,
+    threatRatio,
+    refresh,
+  };
 }

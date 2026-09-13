@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ShieldCheck, Loader2, Eye, EyeOff, AlertCircle, Globe2, Zap, Lock } from "lucide-react";
 import { motion } from "framer-motion";
@@ -38,6 +38,32 @@ const FEATURES = [
 export default function LoginPage() {
   const router = useRouter();
   const { toast } = useToast();
+  // True when no backend is reachable (e.g. public demo deploy): any
+  // credentials are accepted so the full experience is explorable.
+  const [demoMode, setDemoMode] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    const probe = async () => {
+      const api = (process.env.NEXT_PUBLIC_API_URL ?? "").replace(/\/$/, "");
+      const base = api && api !== "http://localhost:8080"
+        ? api
+        : typeof window !== "undefined"
+          ? `${window.location.protocol}//${window.location.hostname}:8080`
+          : "http://localhost:8080";
+      try {
+        const controller = new AbortController();
+        const t = window.setTimeout(() => controller.abort(), 2500);
+        await fetch(`${base}/api/v1/auth/public-key`, { signal: controller.signal, cache: "no-store" });
+        window.clearTimeout(t);
+        if (!cancelled) setDemoMode(false); // any response = real auth present
+      } catch {
+        if (!cancelled) setDemoMode(true);
+      }
+    };
+    void probe();
+    return () => { cancelled = true; };
+  }, []);
   const [mode, setMode] = useState<"login" | "register">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -63,6 +89,16 @@ export default function LoginPage() {
     setLoading(true);
     setError(null);
     try {
+      if (demoMode) {
+        // Demo deploy: mint a local session so the full product is explorable.
+        const demoEmail = email || "demo@sentinel.io";
+        window.localStorage.setItem("sentinel_access_token", `demo-${Date.now()}`);
+        window.localStorage.setItem("sentinel_refresh_token", `demo-${Date.now()}`);
+        window.localStorage.setItem("sentinel_demo_user", demoEmail);
+        toast({ kind: "info", title: "Demo mode", message: "Backend offline — exploring with simulated live telemetry." });
+        router.replace("/");
+        return;
+      }
       if (mode === "register") {
         const reg = await fetch(`${getAPIURL()}/api/v1/auth/register`, {
           method: "POST",

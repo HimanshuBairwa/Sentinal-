@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { DEMO_RULES } from "./demo";
 
 const configuredAPIURL = (process.env.NEXT_PUBLIC_API_URL ?? "").replace(/\/$/, "");
 
@@ -166,14 +167,26 @@ export function useRules() {
   const [rules, setRules] = useState<FraudRule[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  /** true = backend unreachable; serving the demo rule set read-only. */
+  const [demo, setDemo] = useState(false);
 
   const refresh = useCallback(async () => {
     setLoading(true);
     try {
       setRules(await listRules());
       setError(null);
+      setDemo(false);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "Failed to load rules");
+      // Backend offline (public demo deploy): show the demo rule set so the
+      // page still demonstrates the full CRUD UX (read-only).
+      const msg = cause instanceof Error ? cause.message : "Failed to load rules";
+      if (/Failed to load rules \(\d+\)/.test(msg) || /network|fetch/i.test(msg)) {
+        setRules(DEMO_RULES as unknown as FraudRule[]);
+        setDemo(true);
+        setError(null);
+      } else {
+        setError(msg);
+      }
     } finally {
       setLoading(false);
     }
@@ -187,5 +200,5 @@ export function useRules() {
     return () => clearTimeout(t);
   }, [refresh]);
 
-  return { rules, error, loading, refresh };
+  return { rules, error, loading, demo, refresh };
 }
