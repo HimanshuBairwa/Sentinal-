@@ -238,11 +238,12 @@ body {
 /* --- Viewport corner brackets (the FUI frame signature) --- */
 .hud-corner {
   position: fixed;
-  width: 22px;
-  height: 22px;
+  width: 30px;
+  height: 30px;
   pointer-events: none;
   z-index: 40;
-  border-color: rgba(34, 211, 238, 0.5);
+  border-color: #22d3ee;
+  filter: drop-shadow(0 0 6px rgba(34, 211, 238, 0.6));
 }
 .hud-corner-tl { top: 8px; left: 8px; border-top: 1.5px solid; border-left: 1.5px solid; border-top-left-radius: 4px; }
 .hud-corner-tr { top: 8px; right: 8px; border-top: 1.5px solid; border-right: 1.5px solid; border-top-right-radius: 4px; }

@@ -35,6 +35,10 @@ export function MetricCard({
       whileHover={reduceMotion ? undefined : { y: -4 }}
     >
       <div className="flex h-full flex-col">
+        {/* Holographic scan line sweeping across the card on hover */}
+        <span className="pointer-events-none absolute inset-0 overflow-hidden rounded-2xl">
+          <span className="absolute inset-x-0 h-16 -translate-y-16 bg-gradient-to-b from-transparent via-cyan-400/10 to-transparent opacity-0 transition-opacity duration-300 group-hover/metric:translate-y-[130%] group-hover/metric:opacity-100 [transition-duration:900ms,ease-out]" />
+        </span>
         <div className="mb-4 flex items-start justify-between">
           <div>
             <p className="text-sm font-medium tracking-wide text-slate-400">{title}</p>

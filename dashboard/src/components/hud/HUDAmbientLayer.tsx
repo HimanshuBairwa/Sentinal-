@@ -17,6 +17,7 @@ export function HUDAmbientLayer() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   // Particle constellation — canvas keeps the main thread free.
+  // (Skipped only under reduced motion: it is inherently continuous.)
   useEffect(() => {
     if (reduceMotion) return;
     const canvas = canvasRef.current;
@@ -36,17 +37,17 @@ export function HUDAmbientLayer() {
     };
     resize();
 
-    const COUNT = 64;
-    const P = 0.35; // link probability threshold (dist² based)
+    const COUNT = 85;
+    // (removed link-probability hack — direct distance threshold now)
     const particles = Array.from({ length: COUNT }, () => ({
       x: Math.random() * canvas.width,
       y: Math.random() * canvas.height,
-      vx: (Math.random() - 0.5) * 0.12 * DPR,
-      vy: (Math.random() - 0.5) * 0.12 * DPR,
-      r: (Math.random() * 1.1 + 0.5) * DPR,
+      vx: (Math.random() - 0.5) * 0.22 * DPR,
+      vy: (Math.random() - 0.5) * 0.22 * DPR,
+      r: (Math.random() * 1.5 + 0.8) * DPR,
     }));
 
-    const LINK_DIST = 130 * DPR;
+    const LINK_DIST = 175 * DPR;
 
     const tick = () => {
       if (!running) return;
@@ -65,11 +66,11 @@ export function HUDAmbientLayer() {
           const dx = a.x - b.x;
           const dy = a.y - b.y;
           const d2 = dx * dx + dy * dy;
-          if (d2 < LINK_DIST * LINK_DIST * P / P) {
-            const alpha = 0.10 * (1 - Math.sqrt(d2) / LINK_DIST);
+          if (d2 < LINK_DIST * LINK_DIST) {
+            const alpha = 0.42 * (1 - Math.sqrt(d2) / LINK_DIST);
             if (alpha <= 0.02) continue;
             ctx.strokeStyle = `rgba(56, 189, 248, ${alpha})`;
-            ctx.lineWidth = 0.6 * DPR;
+            ctx.lineWidth = 1.1 * DPR;
             ctx.beginPath();
             ctx.moveTo(a.x, a.y);
             ctx.lineTo(b.x, b.y);
@@ -78,7 +79,8 @@ export function HUDAmbientLayer() {
         }
       }
       for (const p of particles) {
-        ctx.fillStyle = "rgba(125, 211, 252, 0.5)";
+        // Larger particles read as indigo accents; the rest bright cyan
+        ctx.fillStyle = p.r > 2 * DPR ? "rgba(129, 140, 248, 0.85)" : "rgba(103, 232, 249, 0.9)";
         ctx.beginPath();
         ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
         ctx.fill();
@@ -101,12 +103,54 @@ export function HUDAmbientLayer() {
     };
   }, [reduceMotion]);
 
-  if (reduceMotion) return null;
+  // REDUCED MOTION: draw the constellation ONCE inside an effect (never
+  // during render) — a frozen starfield, plus all structural HUD chrome.
+  useEffect(() => {
+    if (!reduceMotion) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    const DPR = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width = window.innerWidth * DPR;
+    canvas.height = window.innerHeight * DPR;
+    canvas.style.width = `${window.innerWidth}px`;
+    canvas.style.height = `${window.innerHeight}px`;
+    // Frozen constellation: particles + links, no animation.
+    const stars = Array.from({ length: 85 }, () => ({
+      x: Math.random() * canvas.width,
+      y: Math.random() * canvas.height,
+      r: (Math.random() * 1.5 + 0.8) * DPR,
+    }));
+    const LINK = 175 * DPR;
+    for (let i = 0; i < stars.length; i++) {
+      const a = stars[i];
+      for (let j = i + 1; j < stars.length; j++) {
+        const b = stars[j];
+        const d = Math.hypot(a.x - b.x, a.y - b.y);
+        if (d < LINK) {
+          const alpha = 0.42 * (1 - d / LINK);
+          ctx.strokeStyle = `rgba(56, 189, 248, ${alpha})`;
+          ctx.lineWidth = 1.1 * DPR;
+          ctx.beginPath();
+          ctx.moveTo(a.x, a.y);
+          ctx.lineTo(b.x, b.y);
+          ctx.stroke();
+        }
+      }
+    }
+    for (const s of stars) {
+      ctx.fillStyle = s.r > 2 * DPR ? "rgba(129, 140, 248, 0.85)" : "rgba(103, 232, 249, 0.9)";
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }, [reduceMotion]);
 
   return (
     <>
-      {/* Drifting constellation field */}
-      <canvas ref={canvasRef} className="pointer-events-none fixed inset-0 z-0 opacity-60" aria-hidden="true" />
+      {/* Constellation canvas — animated normally, frozen under RM */}
+      <canvas ref={canvasRef} className="pointer-events-none fixed inset-0 z-0" aria-hidden="true" />
 
       {/* Viewport corner brackets — the FUI signature */}
       <div className="hud-corner hud-corner-tl" aria-hidden="true" />
@@ -114,9 +158,15 @@ export function HUDAmbientLayer() {
       <div className="hud-corner hud-corner-bl" aria-hidden="true" />
       <div className="hud-corner hud-corner-br" aria-hidden="true" />
 
-      {/* Slow CRT sweep — a soft cyan band gliding over everything */}
+      {/* CRT sweep — a pronounced cyan band gliding over everything */}
       <div
-        className="crt-sweep pointer-events-none fixed inset-x-0 top-0 z-[5] h-28 bg-gradient-to-b from-transparent via-cyan-400/[0.045] to-transparent"
+        className="crt-sweep pointer-events-none fixed inset-x-0 top-0 z-[5] h-40 bg-gradient-to-b from-transparent via-cyan-400/[0.09] to-transparent"
+        aria-hidden="true"
+      />
+      {/* Second sweep offset in time — layered like Stark's multi-beam HUD */}
+      <div
+        className="crt-sweep pointer-events-none fixed inset-x-0 top-0 z-[5] h-24 bg-gradient-to-b from-transparent via-indigo-400/[0.07] to-transparent"
+        style={{ animationDelay: "6.5s" }}
         aria-hidden="true"
       />
     </>
@@ -281,6 +331,130 @@ export function HUDStatChip({
     <div className={`flex items-center gap-1.5 rounded-md border px-2 py-1 font-mono text-[10px] ${toneClass}`}>
       <span className="uppercase tracking-wider opacity-60">{label}</span>
       <span className="font-semibold tabular-nums">{value}</span>
+    </div>
+  );
+}
+
+/**
+ * TACTICAL RADAR — the Stark centerpiece. A sweeping radar scope with range
+ * rings, degree ticks, crosshairs, and live threat blips positioned by
+ * deterministic hash (stable per event id). The sweep is SMIL — zero JS per
+ * frame — and blips breathe on staggered delays so the scope feels alive.
+ */
+export function TacticalRadar({
+  threats,
+  size = 320,
+}: {
+  threats: { id: string; score: number; action: string }[];
+  size?: number;
+}) {
+  const reduceMotion = useReducedMotion();
+  const SWEEP_PERIOD = 4.5; // seconds per rotation
+
+  // Deterministic polar position per threat id — stable, no re-randomizing.
+  const blips = useMemo(
+    () =>
+      threats.slice(0, 12).map((t) => {
+        let h = 0;
+        for (let i = 0; i < t.id.length; i++) h = (h * 31 + t.id.charCodeAt(i)) | 0;
+        const angle = (Math.abs(h) % 360) * (Math.PI / 180);
+        const dist = 18 + (Math.abs(h >> 7) % 26); // 18–44% of radius
+        const critical = t.action === "BLOCK" || t.score >= 80;
+        return {
+          id: t.id,
+          x: 50 + dist * Math.cos(angle),
+          y: 50 + dist * Math.sin(angle),
+          critical,
+          score: t.score,
+        };
+      }),
+    [threats]
+  );
+
+  return (
+    <div className="relative mx-auto" style={{ width: size, height: size }}>
+      <svg viewBox="0 0 100 100" className="h-full w-full drop-shadow-[0_0_25px_rgba(34,211,238,0.25)]">
+        <defs>
+          <radialGradient id="radarBg" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stopColor="rgba(34,211,238,0.10)" />
+            <stop offset="100%" stopColor="rgba(2,6,23,0.9)" />
+          </radialGradient>
+          <linearGradient id="beamGrad" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stopColor="rgba(34,211,238,0.55)" />
+            <stop offset="100%" stopColor="rgba(34,211,238,0)" />
+          </linearGradient>
+          <filter id="blipGlow" x="-80%" y="-80%" width="260%" height="260%">
+            <feGaussianBlur stdDeviation="1.2" />
+          </filter>
+        </defs>
+
+        {/* Scope background */}
+        <circle cx="50" cy="50" r="48" fill="url(#radarBg)" stroke="rgba(34,211,238,0.35)" strokeWidth="0.5" />
+
+        {/* Range rings */}
+        {[14, 26, 38].map((r) => (
+          <circle key={r} cx="50" cy="50" r={r} fill="none" stroke="rgba(34,211,238,0.16)" strokeWidth="0.4" strokeDasharray="1 2" />
+        ))}
+
+        {/* Degree ticks every 30° */}
+        {[...Array(12)].map((_, i) => {
+          const a = (i * 30 * Math.PI) / 180;
+          return (
+            <line
+              key={i}
+              x1={50 + 44 * Math.cos(a)} y1={50 + 44 * Math.sin(a)}
+              x2={50 + 47.5 * Math.cos(a)} y2={50 + 47.5 * Math.sin(a)}
+              stroke="rgba(34,211,238,0.4)" strokeWidth="0.6"
+            />
+          );
+        })}
+
+        {/* Crosshair axes */}
+        <line x1="50" y1="4" x2="50" y2="96" stroke="rgba(34,211,238,0.10)" strokeWidth="0.4" />
+        <line x1="4" x2="96" y1="50" y2="50" stroke="rgba(34,211,238,0.10)" strokeWidth="0.4" />
+
+        {/* Sweeping beam — SMIL rotation, zero JS per frame */}
+        {!reduceMotion && (
+          <path d="M50 50 L95 50 A45 45 0 0 0 71 12 Z" fill="url(#beamGrad)">
+            <animateTransform
+              attributeName="transform"
+              type="rotate"
+              from="0 50 50"
+              to="360 50 50"
+              dur={`${SWEEP_PERIOD}s`}
+              repeatCount="indefinite"
+            />
+          </path>
+        )}
+
+        {/* Threat blips — deterministically placed, glow on critical */}
+        {blips.map((b) => (
+          <g key={b.id} filter="url(#blipGlow)">
+            <circle cx={b.x} cy={b.y} r={b.critical ? 1.4 : 1} fill={b.critical ? "#f43f5e" : "#fbbf24"}>
+              {!reduceMotion && (
+                <animate
+                  attributeName="opacity"
+                  values="0.35;1;0.35"
+                  dur="4.5s"
+                  begin={`${(Number(b.id.charCodeAt(0)) % 45) / 10}s`}
+                  repeatCount="indefinite"
+                />
+              )}
+            </circle>
+          </g>
+        ))}
+
+        {/* Center core */}
+        <circle cx="50" cy="50" r="1.8" fill="#22d3ee" className={reduceMotion ? undefined : "animate-pulse"} />
+      </svg>
+
+      {/* Corner readouts on the scope frame */}
+      <span className="absolute left-2 top-2 font-mono text-[9px] tracking-widest text-cyan-400/60">TAC-01</span>
+      <span className="absolute right-2 top-2 font-mono text-[9px] tracking-widest text-cyan-400/60">360°·4.5s</span>
+      <span className="absolute bottom-2 left-2 font-mono text-[9px] tracking-widest text-cyan-400/60">
+        {blips.length} TRK
+      </span>
+      <span className="absolute bottom-2 right-2 font-mono text-[9px] tracking-widest text-emerald-400/60">ACTIVE</span>
     </div>
   );
 }

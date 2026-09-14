@@ -14,12 +14,12 @@ function Shell({ children }: { children: React.ReactNode }) {
   const { events, isConnected, demo } = useLive();
   const [booting, setBooting] = useState(false);
 
-  // Boot sequence runs ONCE per browser session (first authenticated load).
-  // The check runs on mount but defers the state flip through a microtask so
-  // we never call setState synchronously inside the effect body.
+  // Boot sequence runs on EVERY full page load, but not twice within 45s
+  // (so client-side navigation + quick back-nav doesn't replay it).
   useEffect(() => {
-    if (sessionStorage.getItem("sentinel_booted") === null) {
-      sessionStorage.setItem("sentinel_booted", "1");
+    const last = Number(localStorage.getItem("sentinel_boot_at") ?? 0);
+    if (Date.now() - last > 45_000) {
+      localStorage.setItem("sentinel_boot_at", String(Date.now()));
       const t = setTimeout(() => setBooting(true), 0);
       return () => clearTimeout(t);
     }

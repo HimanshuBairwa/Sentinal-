@@ -25,7 +25,7 @@ const WorldThreatMap = dynamic(
   }
 );
 import { motion } from "framer-motion";
-import { HUDStatChip } from "../components/hud/HUDAmbientLayer";
+import { HUDStatChip, TacticalRadar } from "../components/hud/HUDAmbientLayer";
 
 const COUNTRY_COORDS: Record<string, [number, number]> = {
   US: [39.8, -98.6], GB: [54.0, -2.0], CA: [56.1, -106.3], IN: [20.6, 78.9],
@@ -124,6 +124,16 @@ export default function CommandCenter() {
           Telemetry degraded: {error} — showing last known state.
         </div>
       )}
+
+      {/* TACTICAL RADAR — the Stark centerpiece: live threats plotted on
+          a sweeping radar, traced by the beacon path as it rotates. */}
+      <TacticalRadar
+        threats={events.slice(0, 14).map((e) => ({
+          id: e.id ?? e.event_id ?? String(e.risk_score),
+          score: e.risk_score ?? 0,
+          action: e.action ?? "ALLOW",
+        }))}
+      />
 
       {/* Bento grid */}
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-12">
