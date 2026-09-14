@@ -99,6 +99,8 @@ export function TransactionAreaChart({ data }: TransactionAreaChartProps) {
             fillOpacity={1}
             fill="url(#colorTransactions)"
             animationDuration={drawDuration}
+            isAnimationActive={!reduceMotion}
+            animationBegin={0}
             activeDot={{
               r: 5,
               fill: "#22d3ee",
@@ -114,6 +116,8 @@ export function TransactionAreaChart({ data }: TransactionAreaChartProps) {
             fillOpacity={1}
             fill="url(#colorFraud)"
             animationDuration={drawDuration}
+            isAnimationActive={!reduceMotion}
+            animationBegin={0}
             activeDot={{
               r: 5,
               fill: "#f43f5e",

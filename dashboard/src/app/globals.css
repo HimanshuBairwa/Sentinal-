@@ -22,16 +22,52 @@
 
 /* ---------- Panels ---------- */
 @utility glass-panel {
-  @apply bg-slate-900/40 backdrop-blur-2xl border border-slate-700/50 shadow-[0_8px_32px_0_rgba(0,0,0,0.5)];
+  @apply bg-slate-900/40 border border-slate-700/50 shadow-[0_8px_32px_0_rgba(0,0,0,0.5)];
 }
 
 @utility glass-panel-premium {
-  @apply bg-slate-900/60 backdrop-blur-2xl border border-white/5 shadow-[0_8px_32px_0_rgba(0,0,0,0.6),inset_0_1px_0_0_rgba(255,255,255,0.1)];
+  @apply bg-slate-900/60 border border-white/5 shadow-[0_8px_32px_0_rgba(0,0,0,0.6),inset_0_1px_0_0_rgba(255,255,255,0.1)];
 }
+
+/*
+ * PERFORMANCE: removed backdrop-blur-2xl (a full-screen GPU layer per card
+ * that repaints on every scroll/animation — the #1 GPU paint cost with many
+ * cards). The dark palette reads identically without it.
+ */
 
 @utility text-glow {
   text-shadow: 0 0 20px rgba(255, 255, 255, 0.3);
 }
+
+/* ---------- CSS-only cursor spotlight ----------
+ * The compositor tracks --mx/--my; React never re-renders. Enabled via the
+ * .spotlight-card class set by GlassCard (skipped under reduced motion). */
+.spotlight-card {
+  --mx: 50%;
+  --my: 50%;
+}
+.spotlight-card:hover {
+  background-image: radial-gradient(
+    320px circle at var(--mx) var(--my),
+    rgba(34, 211, 238, 0.07),
+    transparent 65%
+  );
+}
+.spotlight-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  opacity: 0;
+  transition: opacity 0.4s ease;
+  background: radial-gradient(
+    260px circle at var(--mx) var(--my),
+    rgba(255, 255, 255, 0.05),
+    transparent 60%
+  );
+  pointer-events: none;
+}
+.spotlight-card:hover::before { opacity: 1; }
 
 /* ---------- Keyframes ---------- */
 @keyframes shimmer {
@@ -39,6 +75,8 @@
   100% { background-position: 200% 0; }
 }
 
+/* Compositor-only properties (transform/opacity) — the browser animates
+ * these on the GPU without triggering layout or paint per frame. */
 @keyframes aurora {
   0% { transform: translate(-10%, -5%) scale(1); opacity: 0.7; }
   50% { transform: translate(5%, 8%) scale(1.15); opacity: 1; }
@@ -161,7 +199,7 @@ body {
 }
 
 .bg-grid-animated {
-  animation: grid-pan 20s linear infinite;
+  animation: grid-pan 40s linear infinite;
 }
 
 /* ---------- Signal ripple (map markers, live dots) ---------- */

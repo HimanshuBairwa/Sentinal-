@@ -133,8 +133,8 @@ export default function LoginPage() {
   return (
     <main className="relative flex min-h-screen bg-[#020617] text-slate-50">
       {/* Ambient background */}
-      <div className="pointer-events-none absolute left-[-10%] top-[-10%] h-[50%] w-[50%] animate-[aurora_14s_ease-in-out_infinite_alternate] rounded-full bg-indigo-600/20 blur-[120px]" />
-      <div className="pointer-events-none absolute bottom-[-10%] right-[-10%] h-[50%] w-[50%] animate-[aurora_18s_ease-in-out_infinite_alternate-reverse] rounded-full bg-cyan-600/15 blur-[120px]" />
+      <div className="pointer-events-none absolute left-[-10%] top-[-10%] h-[50%] w-[50%] animate-[aurora_14s_ease-in-out_infinite_alternate] rounded-full bg-indigo-600/20 blur-[80px] will-change-transform" />
+      <div className="pointer-events-none absolute bottom-[-10%] right-[-10%] h-[50%] w-[50%] animate-[aurora_18s_ease-in-out_infinite_alternate-reverse] rounded-full bg-cyan-600/15 blur-[80px] will-change-transform" />
 
       {/* Left panel: brand story */}
       <div className="relative hidden w-1/2 flex-col justify-between overflow-hidden border-r border-white/5 p-12 lg:flex">

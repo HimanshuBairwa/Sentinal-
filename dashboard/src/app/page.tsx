@@ -7,9 +7,23 @@ import { GlassCard } from "../components/ui/GlassCard";
 import { TiltCard } from "../components/ui/TiltCard";
 import { Gauge } from "../components/ui/Gauge";
 import { useLive } from "../components/live/LiveContext";
-import { TransactionAreaChart } from "../components/charts/TransactionAreaChart";
+import { LazyTransactionAreaChart as TransactionAreaChart } from "../components/charts/LazyCharts";
 import { LiveThreatFeed } from "../components/feed/LiveThreatFeed";
-import { WorldThreatMap, type MapThreat } from "../components/map/WorldThreatMap";
+import dynamic from "next/dynamic";
+import type { MapThreat } from "../components/map/WorldThreatMap";
+
+/** d3-geo + topojson (~150KB) load only when the map card mounts. */
+const WorldThreatMap = dynamic(
+  () => import("../components/map/WorldThreatMap").then((m) => m.WorldThreatMap),
+  {
+    loading: () => (
+      <div className="flex h-full items-center justify-center">
+        <div className="h-10 w-10 animate-spin rounded-full border-2 border-white/10 border-t-cyan-400" />
+      </div>
+    ),
+    ssr: false,
+  }
+);
 import { motion } from "framer-motion";
 
 const COUNTRY_COORDS: Record<string, [number, number]> = {

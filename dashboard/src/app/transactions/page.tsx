@@ -3,7 +3,7 @@
 import { ArrowRightLeft, CheckCircle2, XCircle, Filter } from "lucide-react";
 import { TableSkeleton } from "../../components/ui/Skeleton";
 import { GlassCard } from "../../components/ui/GlassCard";
-import { TransactionAreaChart } from "../../components/charts/TransactionAreaChart";
+import { LazyTransactionAreaChart as TransactionAreaChart } from "../../components/charts/LazyCharts";
 import { useLive } from "../../components/live/LiveContext";
 import { clsx } from "clsx";
 import { useState } from "react";

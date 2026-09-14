@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { AlertOctagon, AlertTriangle, ShieldCheck } from "lucide-react";
 import { clsx } from "clsx";
@@ -11,7 +12,7 @@ import type { AnalyticsEvent } from "../../hooks/useAnalytics";
  * New arrivals slide in with a signal-ripple ping; entries animate out when
  * they fall off the end of the window.
  */
-export function LiveThreatFeed({ events, limit = 12 }: { events: AnalyticsEvent[]; limit?: number }) {
+function LiveThreatFeedImpl({ events, limit = 12 }: { events: AnalyticsEvent[]; limit?: number }) {
   const reduceMotion = useReducedMotion();
   const threats = events
     .filter((event) => event.action === "BLOCK" || event.action === "CHALLENGE" || (event.risk_score ?? 0) >= 60)
@@ -41,11 +42,10 @@ export function LiveThreatFeed({ events, limit = 12 }: { events: AnalyticsEvent[
           return (
             <motion.div
               key={threat.id ?? threat.event_id}
-              layout
-              initial={{ opacity: 0, x: 24, scale: 0.96 }}
-              animate={{ opacity: 1, x: 0, scale: 1 }}
-              exit={{ opacity: 0, x: -24, scale: 0.96 }}
-              transition={{ type: "spring", stiffness: 320, damping: 30 }}
+              initial={{ opacity: 0, x: 24 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.25, ease: "easeOut" }}
               className={clsx(
                 "relative flex items-start gap-3 overflow-hidden rounded-xl border p-4",
                 critical
@@ -99,3 +99,21 @@ export function LiveThreatFeed({ events, limit = 12 }: { events: AnalyticsEvent[
     </div>
   );
 }
+
+
+/**
+ * Memoized: the 1.4s demo tick creates a new events array identity every
+ * time; content-compare by (id, score, action) so identical windows skip
+ * the re-render entirely.
+ */
+export const LiveThreatFeed = memo(LiveThreatFeedImpl, (prev, next) => {
+  if (prev.limit !== next.limit) return false;
+  if (prev.events.length !== next.events.length) return false;
+  for (let i = 0; i < prev.events.length; i++) {
+    const a = prev.events[i];
+    const b = next.events[i];
+    if ((a.id ?? a.event_id) !== (b.id ?? b.event_id)) return false;
+    if (a.risk_score !== b.risk_score || a.action !== b.action) return false;
+  }
+  return true;
+});

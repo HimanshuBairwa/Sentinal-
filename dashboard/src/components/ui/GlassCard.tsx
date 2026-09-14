@@ -1,7 +1,7 @@
 "use client";
 
 import { clsx } from "clsx";
-import { ReactNode, useRef, useState } from "react";
+import { ReactNode } from "react";
 import { motion, HTMLMotionProps, useReducedMotion } from "framer-motion";
 
 interface GlassCardProps extends HTMLMotionProps<"div"> {
@@ -11,46 +11,35 @@ interface GlassCardProps extends HTMLMotionProps<"div"> {
   subtitle?: string;
   action?: ReactNode;
   premium?: boolean;
-  /** Enables the cursor-tracking spotlight sheen. */
+  /** Enables the cursor-tracking spotlight sheen (pure CSS, zero renders). */
   spotlight?: boolean;
 }
 
+/**
+ * GlassCard — the workhorse panel.
+ *
+ * PERFORMANCE: the spotlight is pure CSS (pointer-tracking custom properties
+ * updated by the browser's compositor) — NO React state, NO re-renders per
+ * mousemove (the old setSheen-on-mousemove caused a render storm).
+ */
 export function GlassCard({
   children, className, title, subtitle, action, premium = true, spotlight = false, ...props
 }: GlassCardProps) {
-  const ref = useRef<HTMLDivElement>(null);
-  const [sheen, setSheen] = useState<{ x: number; y: number } | null>(null);
   const reduceMotion = useReducedMotion();
-  const enabled = spotlight && !reduceMotion;
 
   return (
     <motion.div
-      ref={ref}
-      onMouseMove={enabled ? (e) => {
-        const rect = ref.current?.getBoundingClientRect();
-        if (!rect) return;
-        setSheen({ x: e.clientX - rect.left, y: e.clientY - rect.top });
-      } : undefined}
-      onMouseLeave={enabled ? () => setSheen(null) : undefined}
       className={clsx(
         premium ? "glass-panel-premium" : "glass-panel",
-        "group relative flex flex-col overflow-hidden rounded-2xl transition-all duration-300",
+        "group relative flex flex-col overflow-hidden rounded-2xl transition-[border-color,box-shadow] duration-300",
+        spotlight && !reduceMotion && "spotlight-card",
         className
       )}
       {...props}
     >
-      {/* Cursor spotlight — a soft radial sheen that follows the pointer */}
-      {enabled && sheen && (
-        <div
-          className="pointer-events-none absolute z-0 h-64 w-64 rounded-full opacity-60"
-          style={{
-            left: sheen.x - 128,
-            top: sheen.y - 128,
-            background:
-              "radial-gradient(circle, rgba(34,211,238,0.08) 0%, transparent 70%)",
-            transition: "opacity 0.3s ease",
-          }}
-        />
+      {/* Cursor spotlight — driven entirely by CSS custom properties */}
+      {spotlight && !reduceMotion && (
+        <div className="pointer-events-none absolute inset-0 z-0 opacity-0 transition-opacity duration-500 group-hover:opacity-100" />
       )}
 
       {/* Subtle top glare on hover */}

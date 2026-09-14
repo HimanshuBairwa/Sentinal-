@@ -16,8 +16,8 @@ function Shell({ children }: { children: React.ReactNode }) {
       <Sidebar />
       <div className="relative flex flex-1 flex-col overflow-hidden">
         {/* Ambient aurora glows — two counter-rotating light fields */}
-        <div className="pointer-events-none absolute left-[-10%] top-[-10%] h-[40%] w-[40%] animate-[aurora_14s_ease-in-out_infinite_alternate] rounded-full bg-indigo-500/10 blur-[120px]" />
-        <div className="pointer-events-none absolute bottom-[-10%] right-[-10%] h-[40%] w-[40%] animate-[aurora_18s_ease-in-out_infinite_alternate-reverse] rounded-full bg-cyan-500/10 blur-[120px]" />
+        <div className="pointer-events-none absolute left-[-10%] top-[-10%] h-[40%] w-[40%] animate-[aurora_14s_ease-in-out_infinite_alternate] rounded-full bg-indigo-500/10 blur-[80px] will-change-transform" />
+        <div className="pointer-events-none absolute bottom-[-10%] right-[-10%] h-[40%] w-[40%] animate-[aurora_18s_ease-in-out_infinite_alternate-reverse] rounded-full bg-cyan-500/10 blur-[80px] will-change-transform" />
         {/* Ambient panning grid — barely visible, adds depth */}
         <div className="bg-grid bg-grid-animated pointer-events-none absolute inset-0 opacity-[0.35]" />
 

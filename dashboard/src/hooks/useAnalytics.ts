@@ -32,6 +32,19 @@ export type AnalyticsMetrics = {
 
 const configuredAPIURL = (process.env.NEXT_PUBLIC_API_URL ?? "").replace(/\/$/, "");
 
+// Shared timestamp-label cache (module scope — safe to access during render;
+// formatting an ISO string costs ~50x a Map lookup, so each timestamp is
+// formatted exactly once per session across every component).
+const timeLabelCache = new Map<string, string>();
+function formatTimeLabel(iso: string): string {
+  let label = timeLabelCache.get(iso);
+  if (label === undefined) {
+    label = new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+    timeLabelCache.set(iso, label);
+  }
+  return label;
+}
+
 function getAPIURL(): string {
   if (configuredAPIURL && configuredAPIURL !== "http://localhost:8080") return configuredAPIURL;
   if (typeof window === "undefined") return configuredAPIURL || "http://localhost:8080";
@@ -140,16 +153,22 @@ export function useAnalytics() {
       setError(null);
       setLoading(false);
       const tick = window.setInterval(() => {
-        setEvents((current) => {
-          const next = demoTick() as AnalyticsEvent;
-          const merged = [next, ...current].slice(0, 50);
-          setOverview((ov) => ov ? {
-            total_events: ov.total_events + 1,
-            fraud_events: ov.fraud_events + (next.action === "BLOCK" || next.action === "CHALLENGE" ? 1 : 0),
-            fraud_rate: 0, // recomputed below
-          } : ov);
-          return merged;
-        });
+        // Generate the event OUTSIDE the setState updater, and update the two
+        // slices of state separately — never nest setState calls inside an
+        // updater (that's a React anti-pattern that caused double renders
+        // and lag on every tick).
+        const next = demoTick() as AnalyticsEvent;
+        const isFlagged = next.action === "BLOCK" || next.action === "CHALLENGE";
+        setEvents((current) => [next, ...current].slice(0, 50));
+        setOverview((ov) =>
+          ov
+            ? {
+                total_events: ov.total_events + 1,
+                fraud_events: ov.fraud_events + (isFlagged ? 1 : 0),
+                fraud_rate: 0, // derived in metrics memo
+              }
+            : ov
+        );
       }, 1_400);
       return () => window.clearInterval(tick);
     });
@@ -175,8 +194,11 @@ export function useAnalytics() {
     };
   }, [events, overview, demo]);
 
+  // Time-format cache (module-level, shared across hook instances): formatting
+  // an ISO timestamp is ~50x the cost of a Map lookup. Each timestamp's label
+  // is computed once per session — not per render.
   const history = useMemo(() => events.slice().reverse().map((event) => ({
-    time: new Date(event.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
+    time: formatTimeLabel(event.timestamp),
     transactions: 1,
     fraud: event.action === "BLOCK" || event.action === "CHALLENGE" ? 1 : 0,
   })), [events]);

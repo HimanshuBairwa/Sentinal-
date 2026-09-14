@@ -9,7 +9,20 @@ import { FeedSkeleton } from "../../components/ui/Skeleton";
 import { RiskBadge } from "../../components/ui/RiskBadge";
 import { Gauge } from "../../components/ui/Gauge";
 import { useToast } from "../../components/ui/Toast";
-import { WorldThreatMap, type MapThreat } from "../../components/map/WorldThreatMap";
+import dynamic from "next/dynamic";
+import type { MapThreat } from "../../components/map/WorldThreatMap";
+
+const WorldThreatMap = dynamic(
+  () => import("../../components/map/WorldThreatMap").then((m) => m.WorldThreatMap),
+  {
+    loading: () => (
+      <div className="flex h-full items-center justify-center">
+        <div className="h-10 w-10 animate-spin rounded-full border-2 border-white/10 border-t-cyan-400" />
+      </div>
+    ),
+    ssr: false,
+  }
+);
 import { fetchGeo, type GeoPoint } from "../../lib/api";
 import { motion, AnimatePresence } from "framer-motion";
 
