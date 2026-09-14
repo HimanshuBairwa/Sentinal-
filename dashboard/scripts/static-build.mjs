@@ -1,16 +1,22 @@
-// Static-build wrapper: sets NEXT_STATIC_EXPORT=1, then invokes the Next
-// build programmatically via its public JS API. Works identically on
-// Windows/macOS/Linux (no shell env-var syntax, no cross-env dependency).
+// Static-build wrapper: sets NEXT_STATIC_EXPORT=1, then invokes Next's
+// build engine (the exact function the `next build` CLI calls internally).
+// Cross-platform (Windows/macOS/Linux) — no shell env-var syntax needed.
 process.env.NEXT_STATIC_EXPORT = "1";
 process.env.NODE_ENV = process.env.NODE_ENV || "production";
 
-const { nextBuild } = await import("next/dist/cli/next-build.js");
+const mod = await import("next/dist/build/index.js");
+// CJS interop: the module's default export is a namespace object whose
+// .default is the actual build() function (Next's own CLI does the same).
+const build = mod.default?.default ?? mod.default;
+const path = await import("node:path");
 
-const exitCode = await nextBuild(
-  process.cwd(), // project dir
-  undefined,     // no custom entry
-  process.argv.slice(2), // pass through CLI flags
-  true           // isNextDev = false → production build
-);
+const projectDir = path.resolve(process.cwd());
 
-process.exit(exitCode ?? 0);
+try {
+  await build(projectDir, false /* experimentalAnalyze */, false /* profile */);
+  process.exit(0);
+} catch (err) {
+  console.error("> Build error occurred");
+  console.error(err);
+  process.exit(1);
+}

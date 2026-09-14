@@ -3,7 +3,6 @@
   "buildCommand": "npm run build:static",
   "outputDirectory": "out",
   "installCommand": "npm install --no-audit --no-fund",
-  "cleanOutputs": true,
   "headers": [
     {
       "source": "/geo/(.*)",

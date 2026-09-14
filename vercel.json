@@ -2,9 +2,8 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": null,
   "buildCommand": "cd dashboard && npm install --no-audit --no-fund && npm run build:static",
-  "outputDirectory": "dashboard/out",
-  "cleanOutputs": true,
   "installCommand": "echo 'install handled in buildCommand'",
+  "outputDirectory": "dashboard/out",
   "headers": [
     {
       "source": "/geo/(.*)",
