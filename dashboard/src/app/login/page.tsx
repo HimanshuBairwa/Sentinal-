@@ -1,7 +1,6 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
 import { ShieldCheck, Loader2, Eye, EyeOff, AlertCircle, Globe2, Zap, Lock } from "lucide-react";
 import { motion } from "framer-motion";
 import { useToast } from "../../components/ui/Toast";
@@ -36,7 +35,6 @@ const FEATURES = [
 ];
 
 export default function LoginPage() {
-  const router = useRouter();
   const { toast } = useToast();
   // True when no backend is reachable (e.g. public demo deploy): any
   // credentials are accepted so the full experience is explorable.
@@ -96,7 +94,9 @@ export default function LoginPage() {
         window.localStorage.setItem("sentinel_refresh_token", `demo-${Date.now()}`);
         window.localStorage.setItem("sentinel_demo_user", demoEmail);
         toast({ kind: "info", title: "Demo mode", message: "Backend offline — exploring with simulated live telemetry." });
-        router.replace("/");
+        // Hard navigation: static hosts serve the next page as a fresh HTML
+        // document — no client-router RSC fetches that can silently fail.
+        window.location.replace("/");
         return;
       }
       if (mode === "register") {
@@ -120,7 +120,7 @@ export default function LoginPage() {
       window.localStorage.setItem("sentinel_access_token", pair.access_token);
       window.localStorage.setItem("sentinel_refresh_token", pair.refresh_token);
       toast({ kind: "success", title: mode === "login" ? "Welcome back" : "Account created", message: "Establishing secure telemetry uplink…" });
-      router.replace("/");
+      window.location.replace("/");
     } catch (cause) {
       const msg = cause instanceof Error ? cause.message : "Authentication failed";
       setError(msg);

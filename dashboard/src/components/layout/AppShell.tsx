@@ -57,10 +57,15 @@ function Shell({ children }: { children: React.ReactNode }) {
 /**
  * Full application chrome. Login bypasses the shell; everything else gets
  * sidebar + topbar + page transitions, with ONE shared live-telemetry feed.
+ *
+ * NOTE: the pathname check normalizes trailing slashes — the static export
+ * uses trailingSlash:true, so usePathname() returns "/login/" while dev/SSR
+ * return "/login". Both must bypass the AuthGate.
  */
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  if (pathname === "/login") return <>{children}</>;
+  const isLogin = pathname === "/login" || pathname === "/login/";
+  if (isLogin) return <>{children}</>;
 
   return (
     <AuthGate>

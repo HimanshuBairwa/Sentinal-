@@ -15,7 +15,6 @@ import {
   ExternalLink,
   FlaskConical,
 } from "lucide-react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import type { AnalyticsEvent } from "../../hooks/useAnalytics";
 
@@ -55,7 +54,6 @@ function CommandPalette({
 }) {
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState(0);
-  const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
 
   const close = () => {
@@ -93,7 +91,11 @@ function CommandPalette({
 
   const go = (href: string) => {
     close();
-    router.push(href);
+    // Hard navigation: palette targets are full pages — static hosts serve
+    // them as fresh documents, immune to broken client-router RSC fetches.
+    window.location.assign(href.startsWith("/") && !href.endsWith("/") && !href.includes("?") && href !== "/"
+      ? `${href}/`
+      : href);
   };
 
   return (
@@ -244,12 +246,12 @@ function NotificationsDropdown({ events }: { events: AnalyticsEvent[] }) {
 /** User menu with logout. */
 function UserMenu() {
   const [open, setOpen] = useState(false);
-  const router = useRouter();
-
   function logout() {
     window.localStorage.removeItem("sentinel_access_token");
     window.localStorage.removeItem("sentinel_refresh_token");
-    router.replace("/login");
+    window.localStorage.removeItem("sentinel_demo_user");
+    // Hard navigation to the sign-in page — static-host safe.
+    window.location.replace("/login/");
   }
 
   return (
