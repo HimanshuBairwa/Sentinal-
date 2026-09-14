@@ -143,14 +143,18 @@ The Next.js command center is a product-grade console, not a demo:
 
 The dashboard ships with a **self-engaging demo mode**: when no backend is reachable (like a public Vercel deployment), it automatically switches to a deterministic, seeded live-telemetry simulation — the world map, gauges, feed, charts, and toasts all run on realistic data, with an honest `DEMO MODE` badge. Point `NEXT_PUBLIC_API_URL` at a reachable gateway and it uses real data instead. No code changes required either way.
 
-**Deploy in 2 minutes:**
+**Deploy (works from the repo root — no settings needed):**
 
-1. Push the repo to GitHub (done — this repo).
+1. Push the repo to GitHub.
 2. Go to [vercel.com/new](https://vercel.com/new), import the repo.
-3. Set **Root Directory** to `dashboard` (everything else auto-detects: Next.js 16, `npm install`, `next build`).
-4. Deploy — the atlas is served statically with immutable caching; zero other env vars needed for demo mode.
+3. Leave **Root Directory as the repo root** (`. /`). The root `vercel.json` handles everything: installs and builds `dashboard/` into a static `out/` bundle.
+4. Deploy. You get a fully static, CDN-cached site — no server needed.
 
-**Live backend later:** set `NEXT_PUBLIC_API_URL=https://your-gateway.example.com` in Vercel project settings.
+> Alternative: you can also set Root Directory to `dashboard` (the per-directory `vercel.json` uses the same static build).
+
+**Got a 404 before?** That happened when the project was imported with the root directory pointing at a folder without `package.json` — Vercel deployed an empty static site. The new root `vercel.json` makes every import path work.
+
+**Live backend later:** set `NEXT_PUBLIC_API_URL=https://your-gateway.example.com` in Vercel project settings (with the full platform running there).
 
 ## Repository layout
 
