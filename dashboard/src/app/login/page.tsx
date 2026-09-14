@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { ShieldCheck, Loader2, Eye, EyeOff, AlertCircle, Globe2, Zap, Lock } from "lucide-react";
 import { motion } from "framer-motion";
 import { useToast } from "../../components/ui/Toast";
@@ -33,6 +33,65 @@ const FEATURES = [
     text: "RS256-verified JWTs, refresh-token rotation with reuse detection, session families.",
   },
 ];
+
+/** Subtle starfield behind the auth form — shared canvas particles. */
+function LoginStarfield() {
+  const ref = useRef<HTMLCanvasElement>(null);
+  useEffect(() => {
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    const canvas = ref.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    let raf = 0;
+    let running = true;
+    const DPR = Math.min(window.devicePixelRatio || 1, 2);
+    const resize = () => {
+      const rect = canvas.parentElement?.getBoundingClientRect();
+      canvas.width = (rect?.width ?? window.innerWidth / 2) * DPR;
+      canvas.height = (rect?.height ?? window.innerHeight) * DPR;
+    };
+    resize();
+    const stars = Array.from({ length: 46 }, () => ({
+      x: Math.random() * canvas.width,
+      y: Math.random() * canvas.height,
+      r: Math.random() * 1.1 * DPR + 0.3,
+      tw: Math.random() * Math.PI * 2,
+      sp: 0.008 + Math.random() * 0.02,
+    }));
+    const tick = () => {
+      if (!running) return;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      for (const s of stars) {
+        s.tw += s.sp;
+        const a = 0.22 + Math.abs(Math.sin(s.tw)) * 0.5;
+        ctx.fillStyle = `rgba(125, 211, 252, ${a})`;
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    const onVis = () => {
+      running = document.visibilityState === "visible";
+      if (running) raf = requestAnimationFrame(tick);
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => {
+      running = false;
+      cancelAnimationFrame(raf);
+      document.removeEventListener("visibilitychange", onVis);
+    };
+  }, []);
+  return (
+    <canvas
+      ref={ref}
+      className="pointer-events-none absolute right-0 top-0 h-full w-1/2 opacity-50"
+      aria-hidden="true"
+    />
+  );
+}
 
 export default function LoginPage() {
   const { toast } = useToast();
@@ -149,13 +208,28 @@ export default function LoginPage() {
         />
 
         <div className="relative z-10">
-          <div className="flex items-center gap-3">
-            <BrandMark size={44} />
-            <div>
-              <h1 className="text-2xl font-bold tracking-wide">
-                <span className="bg-gradient-to-r from-cyan-300 to-indigo-400 bg-clip-text text-transparent">SENTINEL</span>
-              </h1>
-              <p className="text-xs text-slate-500">Fraud Intelligence Command Center</p>
+          <div className="relative">
+            {/* Expanding reticle rings behind the brand mark */}
+            <div className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
+              {[0, 1, 2].map((i) => (
+                <span
+                  key={i}
+                  className="reticle-ring absolute left-1/2 top-1/2 h-32 w-32 -translate-x-1/2 -translate-y-1/2 rounded-full border border-cyan-400/25"
+                  style={{ animationDelay: `${i * 1.13}s` }}
+                />
+              ))}
+            </div>
+            <div className="relative flex items-center gap-3">
+              <BrandMark size={44} />
+              <div>
+                <h1
+                  className="glitch text-2xl font-bold tracking-wide"
+                  data-text="SENTINEL"
+                >
+                  <span className="bg-gradient-to-r from-cyan-300 to-indigo-400 bg-clip-text text-transparent">SENTINEL</span>
+                </h1>
+                <p className="text-xs text-slate-500">Fraud Intelligence Command Center</p>
+              </div>
             </div>
           </div>
         </div>
@@ -172,6 +246,9 @@ export default function LoginPage() {
               before it happens.
             </span>
           </motion.h2>
+
+          {/* HUD tick ruler under the headline — instrument-panel flavor */}
+          <div className="hud-ticks-x w-64 opacity-80" aria-hidden="true" />
 
           <div className="space-y-5">
             {FEATURES.map((f, i) => (
@@ -200,6 +277,9 @@ export default function LoginPage() {
         </p>
       </div>
 
+      {/* Login-side constellation canvas — subtle starfield behind the form */}
+      <LoginStarfield />
+
       {/* Right panel: auth form */}
       <div className="relative z-10 flex flex-1 items-center justify-center px-6">
         <motion.div
@@ -218,7 +298,7 @@ export default function LoginPage() {
             </div>
           </div>
 
-          <div className="glass-panel-premium rounded-2xl p-8">
+          <div className="glass-panel-premium boot-flicker rounded-2xl p-8">
             <div className="mb-6">
               <h2 className="text-xl font-bold text-white">
                 {mode === "login" ? "Welcome back" : "Create your account"}

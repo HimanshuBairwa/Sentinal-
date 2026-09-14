@@ -38,6 +38,30 @@ function LiveStatusPill({ isConnected }: { isConnected: boolean }) {
   );
 }
 
+/** HUD mission clock — live UTC time with a blinking separator. */
+function MissionClock() {
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(t);
+  }, []);
+  const hh = String(now.getUTCHours()).padStart(2, "0");
+  const mm = String(now.getUTCMinutes()).padStart(2, "0");
+  const ss = String(now.getUTCSeconds()).padStart(2, "0");
+  return (
+    <div className="hidden select-none items-center gap-2 rounded-md border border-cyan-500/20 bg-cyan-500/[0.06] px-2.5 py-1.5 font-mono text-[11px] tabular-nums text-cyan-300/90 xl:flex">
+      <span className="text-[9px] font-semibold uppercase tracking-[0.2em] text-cyan-500/60">UTC</span>
+      <span suppressHydrationWarning>
+        {hh}
+        <span className="animate-[blink_1.2s_steps(2,start)_infinite]">:</span>
+        {mm}
+        <span className="animate-[blink_1.2s_steps(2,start)_infinite]">:</span>
+        {ss}
+      </span>
+    </div>
+  );
+}
+
 type NavTarget = { label: string; href: string };
 
 /** Command palette (⌘K) with fuzzy search over nav targets + live threat IPs. */
@@ -328,6 +352,7 @@ export function TopBar({ events = [], isConnected = false, demo = false }: { eve
       </div>
 
       <div className="flex items-center gap-4">
+        <MissionClock />
         {demo ? (
           <div className="flex items-center gap-2 rounded-full border border-cyan-500/30 bg-cyan-500/10 px-3 py-1.5 text-cyan-400 shadow-[0_0_15px_rgba(34,211,238,0.2)]">
             <FlaskConical size={13} />

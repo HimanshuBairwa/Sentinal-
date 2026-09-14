@@ -24,7 +24,10 @@ export function Sidebar() {
         <div className="flex items-center gap-3">
           <BrandMark size={40} />
           <div>
-            <h1 className="text-lg font-bold tracking-wide">
+            <h1
+              className="glitch text-lg font-bold tracking-wide"
+              data-text="SENTINEL"
+            >
               <span className="bg-gradient-to-r from-cyan-300 to-indigo-400 bg-clip-text text-transparent">SENTINEL</span>
             </h1>
             <p className="mt-0.5 text-[10px] uppercase tracking-[0.2em] text-slate-500">
@@ -34,10 +37,12 @@ export function Sidebar() {
         </div>
       </div>
 
-      <nav className="flex-1 space-y-1 p-4">
+      <nav className="relative flex-1 space-y-1 p-4">
+        {/* Technical tick rail down the nav — flight-instrument feel */}
+        <span className="hud-ticks-y absolute right-2 top-6 bottom-6 opacity-70" aria-hidden="true" />
         {navItems.map((item) => {
           const Icon = item.icon;
-          const isActive = pathname === item.href;
+          const isActive = pathname === item.href || pathname === `${item.href}/`;
           return (
             <Link
               key={item.href}
@@ -53,7 +58,7 @@ export function Sidebar() {
                   transition={{ type: "spring", stiffness: 400, damping: 32 }}
                 />
               )}
-              <Icon size={18} className="relative z-10 shrink-0" />
+              <Icon size={18} className="relative z-10 shrink-0 transition-transform duration-300 group-hover:scale-110" />
               <span className="relative z-10 flex-1">
                 <span className="block text-sm font-medium">{item.label}</span>
                 <span
@@ -75,11 +80,17 @@ export function Sidebar() {
         })}
       </nav>
 
+      {/* Equalizer bars — the “system is listening” indicator */}
       <div className="border-t border-white/10 p-4">
         <div className="flex items-center gap-3 rounded-lg bg-emerald-500/5 px-4 py-2.5">
-          <div className="relative flex h-2 w-2">
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
-            <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400" />
+          <div className="flex h-4 items-end gap-[2px]" aria-hidden="true">
+            {[0.9, 0.7, 1.15, 0.85, 1.0].map((d, i) => (
+              <span
+                key={i}
+                className="eq-bar h-full w-[3px] rounded-sm bg-emerald-400/70"
+                style={{ animationDuration: `${d}s`, animationDelay: `${i * 0.12}s` }}
+              />
+            ))}
           </div>
           <span className="text-xs text-slate-400">All services operational</span>
         </div>

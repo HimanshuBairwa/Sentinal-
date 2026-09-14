@@ -25,6 +25,7 @@ const WorldThreatMap = dynamic(
   }
 );
 import { motion } from "framer-motion";
+import { HUDStatChip } from "../components/hud/HUDAmbientLayer";
 
 const COUNTRY_COORDS: Record<string, [number, number]> = {
   US: [39.8, -98.6], GB: [54.0, -2.0], CA: [56.1, -106.3], IN: [20.6, 78.9],
@@ -78,6 +79,20 @@ export default function CommandCenter() {
           <p className="mt-1 text-sm text-slate-400">Real-time global fraud monitoring</p>
         </div>
         <div className="flex items-center gap-3">
+          {/* HUD instrument chips — mission diagnostics, Stark-style */}
+          <div className="flex flex-wrap items-center gap-2">
+            <HUDStatChip label="Events" value={String(events.length)} tone="cyan" />
+            <HUDStatChip
+              label="Threats"
+              value={String(events.filter((e) => e.action === "BLOCK" || e.action === "CHALLENGE").length)}
+              tone={events.some((e) => e.action === "BLOCK") ? "rose" : "amber"}
+            />
+            <HUDStatChip
+              label="Uplink"
+              value={isConnected ? "SYNC" : "DOWN"}
+              tone={isConnected ? "emerald" : "rose"}
+            />
+          </div>
           <div className="flex items-center gap-2 text-xs text-slate-500">
             <GaugeIcon className="h-3.5 w-3.5" />
             {events.length} events buffered

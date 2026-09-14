@@ -1,15 +1,45 @@
 "use client";
 
+import { useEffect, useMemo, useState } from "react";
 import { usePathname } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import { Sidebar } from "./Sidebar";
 import { TopBar } from "./TopBar";
 import { AuthGate } from "./AuthGate";
 import { LiveProvider, useLive } from "../live/LiveContext";
+import { HUDAmbientLayer, BootSequence, TelemetryTicker } from "../hud/HUDAmbientLayer";
 
 function Shell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const { events, isConnected, demo } = useLive();
+  const [booting, setBooting] = useState(false);
+
+  // Boot sequence runs ONCE per browser session (first authenticated load).
+  // The check runs on mount but defers the state flip through a microtask so
+  // we never call setState synchronously inside the effect body.
+  useEffect(() => {
+    if (sessionStorage.getItem("sentinel_booted") === null) {
+      sessionStorage.setItem("sentinel_booted", "1");
+      const t = setTimeout(() => setBooting(true), 0);
+      return () => clearTimeout(t);
+    }
+  }, []);
+
+  // Telemetry ticker items — derived from the live stream, throttled by memo.
+  const tickerItems = useMemo(() => {
+    const items: string[] = [
+      "SENTINEL TELEMETRY LINK ACTIVE",
+      `DECISIONS BUFFERED: ${events.length}`,
+      isConnected ? "WS UPLINK: STABLE" : "WS UPLINK: RECONNECTING",
+    ];
+    for (const e of events.slice(0, 8)) {
+      const ip = e.ip_address ?? "unknown";
+      const score = e.risk_score?.toFixed(1) ?? "—";
+      items.push(`${e.action ?? "ALLOW"} · ${ip} · RISK ${score}`);
+    }
+    if (demo) items.push("DEMO MODE — SIMULATED TELEMETRY");
+    return items;
+  }, [events, isConnected, demo]);
 
   return (
     <div className="flex h-screen overflow-hidden bg-[#020617] text-slate-50">
@@ -20,6 +50,9 @@ function Shell({ children }: { children: React.ReactNode }) {
         <div className="pointer-events-none absolute bottom-[-10%] right-[-10%] h-[40%] w-[40%] animate-[aurora_18s_ease-in-out_infinite_alternate-reverse] rounded-full bg-cyan-500/10 blur-[80px] will-change-transform" />
         {/* Ambient panning grid — barely visible, adds depth */}
         <div className="bg-grid bg-grid-animated pointer-events-none absolute inset-0 opacity-[0.35]" />
+
+        {/* JARVIS HUD ambient layer: particles + corner brackets + CRT sweep */}
+        <HUDAmbientLayer />
 
         <TopBar events={events} isConnected={isConnected} demo={demo} />
         <main className="relative z-0 flex-1 overflow-auto">
@@ -48,8 +81,16 @@ function Shell({ children }: { children: React.ReactNode }) {
               {children}
             </motion.div>
           </AnimatePresence>
+          {/* Bottom breathing room so the fixed ticker never covers content */}
+          <div className="h-8" aria-hidden="true" />
         </main>
+
+        {/* Bottom telemetry ticker — live decisions scrolling by */}
+        <TelemetryTicker items={tickerItems} />
       </div>
+
+      {/* Stark boot sequence (once per session, first authenticated load) */}
+      {booting && <BootSequence onDone={() => setBooting(false)} />}
     </div>
   );
 }

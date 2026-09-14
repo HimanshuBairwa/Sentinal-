@@ -45,6 +45,14 @@ export function GlassCard({
       {/* Subtle top glare on hover */}
       <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent opacity-0 transition-opacity duration-500 group-hover:opacity-100" />
 
+      {/* HUD corner brackets — expand on hover (FUI signature detail) */}
+      {premium && (
+        <>
+          <span className="card-corner card-corner-tl" aria-hidden="true" />
+          <span className="card-corner card-corner-br" aria-hidden="true" />
+        </>
+      )}
+
       {(title || action) && (
         <div className="flex items-center justify-between border-b border-white/5 bg-white/[0.02] px-5 py-4">
           <div>

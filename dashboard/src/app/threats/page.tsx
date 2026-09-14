@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ShieldAlert, MapPin } from "lucide-react";
+import { HUDStatChip } from "../../components/hud/HUDAmbientLayer";
 import { useLive } from "../../components/live/LiveContext";
 import { LiveThreatFeed } from "../../components/feed/LiveThreatFeed";
 import { GlassCard } from "../../components/ui/GlassCard";
@@ -147,18 +148,29 @@ export default function ThreatsPage() {
             <p className="text-sm text-slate-400">Real-geometry global map · live attack telemetry</p>
           </div>
         </div>
-        <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 p-1">
-          {(["all", "blocked"] as const).map((mode) => (
-            <button
-              key={mode}
-              onClick={() => setMapFilter(mode)}
-              className={`rounded-md px-3 py-1.5 text-xs font-semibold transition-colors ${
-                mapFilter === mode ? "bg-rose-500/20 text-rose-300" : "text-slate-400 hover:text-slate-200"
-              }`}
-            >
-              {mode === "all" ? "All Threats" : "Blocked Only"}
-            </button>
-          ))}
+        <div className="flex items-center gap-3">
+          {/* HUD readout chips — live threat posture diagnostics */}
+          <div className="hidden flex-wrap items-center gap-2 md:flex">
+            <HUDStatChip label="Buffer" value={String(events.length)} tone="cyan" />
+            <HUDStatChip
+              label="Blocked"
+              value={String(events.filter((e) => e.action === "BLOCK").length)}
+              tone="rose"
+            />
+          </div>
+          <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 p-1">
+            {(["all", "blocked"] as const).map((mode) => (
+              <button
+                key={mode}
+                onClick={() => setMapFilter(mode)}
+                className={`rounded-md px-3 py-1.5 text-xs font-semibold transition-colors ${
+                  mapFilter === mode ? "bg-rose-500/20 text-rose-300" : "text-slate-400 hover:text-slate-200"
+                }`}
+              >
+                {mode === "all" ? "All Threats" : "Blocked Only"}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
